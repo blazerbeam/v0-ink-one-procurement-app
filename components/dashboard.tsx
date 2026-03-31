@@ -1,7 +1,6 @@
 "use client"
 
 import useSWR from "swr"
-
 import { PartyPopper } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { EventCard } from "@/components/event-card"

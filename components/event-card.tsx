@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { Calendar, MapPin, Users, Target } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -40,8 +41,9 @@ export function EventCard({ event }: EventCardProps) {
   }
 
   return (
-    <Card className="transition-shadow hover:shadow-md">
-      <CardHeader className="pb-3">
+    <Link href={`/event/${event.id}`} className="block">
+      <Card className="transition-shadow hover:shadow-md cursor-pointer">
+        <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <CardTitle className="truncate text-lg">{event.event_name}</CardTitle>
@@ -97,5 +99,6 @@ export function EventCard({ event }: EventCardProps) {
         </div>
       </CardContent>
     </Card>
+    </Link>
   )
 }
