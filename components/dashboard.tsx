@@ -1,11 +1,12 @@
 "use client"
 
 import useSWR from "swr"
-import { Calendar, PartyPopper } from "lucide-react"
+
+import { PartyPopper } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { EventCard } from "@/components/event-card"
 import { CreateEventDialog } from "@/components/create-event-dialog"
-import { Empty, EmptyDescription, EmptyIcon, EmptyTitle } from "@/components/ui/empty"
+import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Event } from "@/lib/types"
 
@@ -71,9 +72,9 @@ export function Dashboard() {
         </div>
       ) : (
         <Empty>
-          <EmptyIcon>
-            <PartyPopper className="h-10 w-10" />
-          </EmptyIcon>
+          <EmptyMedia variant="icon">
+            <PartyPopper className="h-6 w-6" />
+          </EmptyMedia>
           <EmptyTitle>No events yet</EmptyTitle>
           <EmptyDescription>
             Create your first event to start managing procurement for your gala.
