@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { ItemStatusBadge } from "@/components/item-status-badge"
-import { Item, ItemStatus, Package } from "@/lib/types"
+import { Item, ItemStatus, Package, STATUS_LABELS } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { MoreHorizontal, Trash2 } from "lucide-react"
 
@@ -28,13 +28,7 @@ interface ItemsTableProps {
   onUpdate: () => void
 }
 
-const statusOptions: { value: ItemStatus; label: string }[] = [
-  { value: "expected", label: "Expected" },
-  { value: "confirmed", label: "Confirmed" },
-  { value: "received", label: "Received" },
-  { value: "missing", label: "Missing" },
-  { value: "fulfilled", label: "Fulfilled" },
-]
+const statusOptions: ItemStatus[] = ["expected", "confirmed", "received", "missing", "fulfilled"]
 
 export function ItemsTable({ items, packages, onUpdate }: ItemsTableProps) {
   const [updatingId, setUpdatingId] = useState<string | null>(null)
@@ -117,13 +111,13 @@ export function ItemsTable({ items, packages, onUpdate }: ItemsTableProps) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {statusOptions.map((option) => (
+                    {statusOptions.map((status) => (
                       <DropdownMenuItem
-                        key={option.value}
-                        onClick={() => updateStatus(item.id, option.value)}
-                        disabled={item.status === option.value}
+                        key={status}
+                        onClick={() => updateStatus(item.id, status)}
+                        disabled={item.status === status}
                       >
-                        Mark as {option.label}
+                        Mark as {STATUS_LABELS[status]}
                       </DropdownMenuItem>
                     ))}
                     <DropdownMenuSeparator />

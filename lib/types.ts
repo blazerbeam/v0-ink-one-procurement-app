@@ -46,6 +46,8 @@ export interface Item {
   estimated_value: number | null
   status: ItemStatus
   owner_name: string | null
+  owner_id: string | null
+  owner?: Volunteer | null
   created_at: string
   updated_at: string
 }
@@ -56,11 +58,40 @@ export interface ItemFormData {
   donor_name: string
   estimated_value: number | string
   status: ItemStatus
-  owner_name: string
+  owner_id: string
   package_id: string
 }
 
 export interface PackageFormData {
   name: string
   description: string
+}
+
+export interface Volunteer {
+  id: string
+  event_id: string
+  first_name: string
+  last_name: string
+  email: string | null
+  phone: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface VolunteerFormData {
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  notes: string
+}
+
+// Status display labels
+export const STATUS_LABELS: Record<ItemStatus, string> = {
+  expected: 'Pledged',
+  confirmed: 'Confirmed',
+  received: 'Received',
+  missing: 'Missing',
+  fulfilled: 'Handed Off'
 }

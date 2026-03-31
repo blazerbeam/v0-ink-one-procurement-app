@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronRight, MoreHorizontal, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight, MoreHorizontal, Trash2, UserCircle } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,26 +17,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ItemStatusBadge } from "@/components/item-status-badge"
-import { Item, ItemStatus, Package } from "@/lib/types"
+import { Item, ItemStatus, Package, Volunteer, STATUS_LABELS } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 
 interface PackageCardProps {
   pkg: Package
   items: Item[]
+  volunteers: Volunteer[]
   onUpdate: () => void
 }
 
-const statusOptions: { value: ItemStatus; label: string }[] = [
-  { value: "expected", label: "Expected" },
-  { value: "confirmed", label: "Confirmed" },
-  { value: "received", label: "Received" },
-  { value: "missing", label: "Missing" },
-  { value: "fulfilled", label: "Fulfilled" },
-]
+const statusOptions: ItemStatus[] = ["expected", "confirmed", "received", "missing", "fulfilled"]
 
-export function PackageCard({ pkg, items, onUpdate }: PackageCardProps) {
+export function PackageCard({ pkg, items, volunteers, onUpdate }: PackageCardProps) {
   const [isOpen, setIsOpen] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+
+  const getVolunteerName = (ownerId: string | null) => {
+    if (!ownerId) return null
+    const volunteer = volunteers.find(v => v.id === ownerId)
+    return volunteer ? `${volunteer.first_name} ${volunteer.last_name}` : null
+  }
 
   const totalValue = items.reduce((sum, item) => sum + (item.estimated_value || 0), 0)
   const securedItems = items.filter((item) =>
@@ -122,56 +123,65 @@ export function PackageCard({ pkg, items, onUpdate }: PackageCardProps) {
               </div>
             ) : (
               <div className="space-y-2 border-t pt-3">
-                {items.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`flex items-center justify-between py-2 px-3 rounded-md bg-muted/50 ${
-                      updatingId === item.id ? "opacity-50" : ""
-                    }`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium truncate">{item.name}</span>
-                        <ItemStatusBadge status={item.status} />
+                {items.map((item) => {
+                  const ownerName = getVolunteerName(item.owner_id) || item.owner_name
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex items-center justify-between py-2 px-3 rounded-md bg-muted/50 ${
+                        updatingId === item.id ? "opacity-50" : ""
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium truncate">{item.name}</span>
+                          <ItemStatusBadge status={item.status} />
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                          {item.donor_name && <span>{item.donor_name}</span>}
+                          {item.estimated_value && (
+                            <span className="font-medium text-foreground">
+                              ${item.estimated_value.toLocaleString()}
+                            </span>
+                          )}
+                          {ownerName && (
+                            <span className="flex items-center gap-1">
+                              <UserCircle className="h-3 w-3" />
+                              {ownerName}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                        {item.donor_name && <span>{item.donor_name}</span>}
-                        {item.estimated_value && (
-                          <span className="font-medium text-foreground">
-                            ${item.estimated_value.toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Item actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {statusOptions.map((option) => (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Item actions</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {statusOptions.map((status) => (
+                            <DropdownMenuItem
+                              key={status}
+                              onClick={() => updateStatus(item.id, status)}
+                              disabled={item.status === status}
+                            >
+                              Mark as {STATUS_LABELS[status]}
+                            </DropdownMenuItem>
+                          ))}
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            key={option.value}
-                            onClick={() => updateStatus(item.id, option.value)}
-                            disabled={item.status === option.value}
+                            onClick={() => deleteItem(item.id)}
+                            className="text-destructive"
                           >
-                            Mark as {option.label}
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
                           </DropdownMenuItem>
-                        ))}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => deleteItem(item.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </CardContent>

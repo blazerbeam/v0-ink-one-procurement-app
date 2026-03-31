@@ -1,19 +1,19 @@
 import { Badge } from "@/components/ui/badge"
-import { ItemStatus } from "@/lib/types"
+import { ItemStatus, STATUS_LABELS } from "@/lib/types"
 
-const statusConfig: Record<ItemStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  expected: { label: "Expected", variant: "outline" },
-  confirmed: { label: "Confirmed", variant: "secondary" },
-  received: { label: "Received", variant: "default" },
-  missing: { label: "Missing", variant: "destructive" },
-  fulfilled: { label: "Fulfilled", variant: "default" },
+const statusConfig: Record<ItemStatus, { variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  expected: { variant: "outline" },
+  confirmed: { variant: "secondary" },
+  received: { variant: "default" },
+  missing: { variant: "destructive" },
+  fulfilled: { variant: "default" },
 }
 
 export function ItemStatusBadge({ status }: { status: ItemStatus }) {
   const config = statusConfig[status]
   return (
     <Badge variant={config.variant} className={status === "fulfilled" ? "bg-primary" : ""}>
-      {config.label}
+      {STATUS_LABELS[status]}
     </Badge>
   )
 }

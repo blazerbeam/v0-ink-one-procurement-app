@@ -24,23 +24,20 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
 import { Plus } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { ItemFormData, ItemStatus, Package } from "@/lib/types"
+import { ItemFormData, ItemStatus, Package, Volunteer, STATUS_LABELS } from "@/lib/types"
+import { AddVolunteerDialog } from "./add-volunteer-dialog"
 
 interface AddItemDialogProps {
   eventId: string
   packages: Package[]
+  volunteers: Volunteer[]
   onItemAdded: () => void
+  onVolunteerAdded: () => void
 }
 
-const statusOptions: { value: ItemStatus; label: string }[] = [
-  { value: "expected", label: "Expected" },
-  { value: "confirmed", label: "Confirmed" },
-  { value: "received", label: "Received" },
-  { value: "missing", label: "Missing" },
-  { value: "fulfilled", label: "Fulfilled" },
-]
+const statusOptions: ItemStatus[] = ["expected", "confirmed", "received", "missing", "fulfilled"]
 
-export function AddItemDialog({ eventId, packages, onItemAdded }: AddItemDialogProps) {
+export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVolunteerAdded }: AddItemDialogProps) {
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState<ItemFormData>({
@@ -49,7 +46,7 @@ export function AddItemDialog({ eventId, packages, onItemAdded }: AddItemDialogP
     donor_name: "",
     estimated_value: "",
     status: "expected",
-    owner_name: "",
+    owner_id: "",
     package_id: "",
   })
 
@@ -60,6 +57,12 @@ export function AddItemDialog({ eventId, packages, onItemAdded }: AddItemDialogP
     setIsSubmitting(true)
     const supabase = createClient()
 
+    // Get owner name from volunteer if selected
+    const selectedVolunteer = volunteers.find(v => v.id === formData.owner_id)
+    const ownerName = selectedVolunteer 
+      ? `${selectedVolunteer.first_name} ${selectedVolunteer.last_name}`
+      : null
+
     const { error } = await supabase.from("items").insert({
       event_id: eventId,
       name: formData.name.trim(),
@@ -67,7 +70,8 @@ export function AddItemDialog({ eventId, packages, onItemAdded }: AddItemDialogP
       donor_name: formData.donor_name.trim() || null,
       estimated_value: formData.estimated_value ? Number(formData.estimated_value) : null,
       status: formData.status,
-      owner_name: formData.owner_name.trim() || null,
+      owner_id: formData.owner_id || null,
+      owner_name: ownerName,
       package_id: formData.package_id || null,
     })
 
@@ -80,7 +84,7 @@ export function AddItemDialog({ eventId, packages, onItemAdded }: AddItemDialogP
         donor_name: "",
         estimated_value: "",
         status: "expected",
-        owner_name: "",
+        owner_id: "",
         package_id: "",
       })
       setOpen(false)
@@ -159,22 +163,39 @@ export function AddItemDialog({ eventId, packages, onItemAdded }: AddItemDialogP
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {statusOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
+                    {statusOptions.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {STATUS_LABELS[status]}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </Field>
               <Field>
-                <FieldLabel htmlFor="owner_name">Owner/Assignee</FieldLabel>
-                <Input
-                  id="owner_name"
-                  value={formData.owner_name}
-                  onChange={(e) => setFormData({ ...formData, owner_name: e.target.value })}
-                  placeholder="Who is responsible?"
-                />
+                <FieldLabel htmlFor="owner">Owner/Assignee</FieldLabel>
+                <div className="flex gap-2">
+                  <Select
+                    value={formData.owner_id}
+                    onValueChange={(value) => setFormData({ ...formData, owner_id: value })}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select volunteer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Unassigned</SelectItem>
+                      {volunteers.map((volunteer) => (
+                        <SelectItem key={volunteer.id} value={volunteer.id}>
+                          {volunteer.first_name} {volunteer.last_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <AddVolunteerDialog 
+                    eventId={eventId} 
+                    onVolunteerAdded={onVolunteerAdded}
+                    variant="inline"
+                  />
+                </div>
               </Field>
             </div>
             {packages.length > 0 && (

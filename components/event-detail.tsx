@@ -3,7 +3,7 @@
 import useSWR from "swr"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
-import { Event, Item, Package } from "@/lib/types"
+import { Event, Item, Package, Volunteer, ItemStatus, STATUS_LABELS } from "@/lib/types"
 import { Header } from "@/components/header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,9 +11,11 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/ui/progress"
 import { AddItemDialog } from "@/components/add-item-dialog"
 import { AddPackageDialog } from "@/components/add-package-dialog"
+import { AddVolunteerDialog } from "@/components/add-volunteer-dialog"
 import { PackageCard } from "@/components/package-card"
 import { ItemStatusBadge } from "@/components/item-status-badge"
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,14 +34,16 @@ import {
   Calendar,
   ChevronDown,
   DollarSign,
+  Mail,
   MapPin,
   MoreHorizontal,
   Package as PackageIcon,
+  Phone,
   Trash2,
+  UserCircle,
   Users,
 } from "lucide-react"
 import { useState } from "react"
-import { ItemStatus } from "@/lib/types"
 
 interface EventDetailProps {
   eventId: string
@@ -48,26 +52,22 @@ interface EventDetailProps {
 async function fetchEventData(eventId: string) {
   const supabase = createClient()
   
-  const [eventResult, packagesResult, itemsResult] = await Promise.all([
+  const [eventResult, packagesResult, itemsResult, volunteersResult] = await Promise.all([
     supabase.from("events").select("*").eq("id", eventId).single(),
     supabase.from("packages").select("*").eq("event_id", eventId).order("created_at", { ascending: true }),
     supabase.from("items").select("*").eq("event_id", eventId).order("created_at", { ascending: false }),
+    supabase.from("volunteers").select("*").eq("event_id", eventId).order("first_name", { ascending: true }),
   ])
 
   return {
     event: eventResult.data as Event | null,
     packages: (packagesResult.data || []) as Package[],
     items: (itemsResult.data || []) as Item[],
+    volunteers: (volunteersResult.data || []) as Volunteer[],
   }
 }
 
-const statusOptions: { value: ItemStatus; label: string }[] = [
-  { value: "expected", label: "Expected" },
-  { value: "confirmed", label: "Confirmed" },
-  { value: "received", label: "Received" },
-  { value: "missing", label: "Missing" },
-  { value: "fulfilled", label: "Fulfilled" },
-]
+const statusOptions: ItemStatus[] = ["expected", "confirmed", "received", "missing", "fulfilled"]
 
 export function EventDetail({ eventId }: EventDetailProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -81,6 +81,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
   const event = data?.event
   const packages = data?.packages || []
   const items = data?.items || []
+  const volunteers = data?.volunteers || []
 
   // Computed values
   const totalValue = items.reduce((sum, item) => sum + (item.estimated_value || 0), 0)
@@ -91,6 +92,13 @@ export function EventDetail({ eventId }: EventDetailProps) {
   // Items by category
   const unassignedItems = items.filter((item) => !item.package_id)
   const atRiskItems = items.filter((item) => item.status === "expected")
+
+  // Get volunteer name by id
+  const getVolunteerName = (ownerId: string | null) => {
+    if (!ownerId) return null
+    const volunteer = volunteers.find(v => v.id === ownerId)
+    return volunteer ? `${volunteer.first_name} ${volunteer.last_name}` : null
+  }
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return null
@@ -113,6 +121,12 @@ export function EventDetail({ eventId }: EventDetailProps) {
   const deleteItem = async (itemId: string) => {
     const supabase = createClient()
     await supabase.from("items").delete().eq("id", itemId)
+    mutate()
+  }
+
+  const deleteVolunteer = async (volunteerId: string) => {
+    const supabase = createClient()
+    await supabase.from("volunteers").delete().eq("id", volunteerId)
     mutate()
   }
 
@@ -154,53 +168,247 @@ export function EventDetail({ eventId }: EventDetailProps) {
     )
   }
 
-  const ItemRow = ({ item }: { item: Item }) => (
-    <div
-      className={`flex items-center justify-between py-2 px-3 rounded-md bg-muted/50 ${
-        updatingId === item.id ? "opacity-50" : ""
-      }`}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-medium truncate">{item.name}</span>
-          <ItemStatusBadge status={item.status} />
+  const ItemRow = ({ item }: { item: Item }) => {
+    const ownerName = getVolunteerName(item.owner_id) || item.owner_name
+    return (
+      <div
+        className={`flex items-center justify-between py-2 px-3 rounded-md bg-muted/50 ${
+          updatingId === item.id ? "opacity-50" : ""
+        }`}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium truncate">{item.name}</span>
+            <ItemStatusBadge status={item.status} />
+          </div>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            {item.donor_name && <span>{item.donor_name}</span>}
+            {item.estimated_value && (
+              <span className="font-medium text-foreground">
+                ${item.estimated_value.toLocaleString()}
+              </span>
+            )}
+            {ownerName && (
+              <span className="flex items-center gap-1">
+                <UserCircle className="h-3 w-3" />
+                {ownerName}
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          {item.donor_name && <span>{item.donor_name}</span>}
-          {item.estimated_value && (
-            <span className="font-medium text-foreground">
-              ${item.estimated_value.toLocaleString()}
-            </span>
-          )}
-        </div>
-      </div>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-            <MoreHorizontal className="h-4 w-4" />
-            <span className="sr-only">Item actions</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {statusOptions.map((option) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">Item actions</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {statusOptions.map((status) => (
+              <DropdownMenuItem
+                key={status}
+                onClick={() => updateStatus(item.id, status)}
+                disabled={item.status === status}
+              >
+                Mark as {STATUS_LABELS[status]}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
             <DropdownMenuItem
-              key={option.value}
-              onClick={() => updateStatus(item.id, option.value)}
-              disabled={item.status === option.value}
+              onClick={() => deleteItem(item.id)}
+              className="text-destructive"
             >
-              Mark as {option.label}
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
             </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => deleteItem(item.id)}
-            className="text-destructive"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    )
+  }
+
+  const VolunteersTab = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Volunteers ({volunteers.length})</h2>
+        <AddVolunteerDialog eventId={eventId} onVolunteerAdded={() => mutate()} />
+      </div>
+      
+      {volunteers.length === 0 ? (
+        <Card>
+          <CardContent className="py-12">
+            <Empty>
+              <EmptyMedia variant="icon">
+                <Users className="h-6 w-6" />
+              </EmptyMedia>
+              <EmptyTitle>No volunteers yet</EmptyTitle>
+              <EmptyDescription>
+                Add volunteers to assign them as item owners
+              </EmptyDescription>
+            </Empty>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {volunteers.map((volunteer) => {
+            const assignedItems = items.filter(item => item.owner_id === volunteer.id)
+            return (
+              <Card key={volunteer.id}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-base">
+                        {volunteer.first_name} {volunteer.last_name}
+                      </CardTitle>
+                      <CardDescription>
+                        {assignedItems.length} item{assignedItems.length !== 1 ? 's' : ''} assigned
+                      </CardDescription>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => deleteVolunteer(volunteer.id)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Remove Volunteer
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground space-y-1">
+                  {volunteer.email && (
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-3.5 w-3.5" />
+                      <a href={`mailto:${volunteer.email}`} className="hover:text-foreground">
+                        {volunteer.email}
+                      </a>
+                    </div>
+                  )}
+                  {volunteer.phone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-3.5 w-3.5" />
+                      <a href={`tel:${volunteer.phone}`} className="hover:text-foreground">
+                        {volunteer.phone}
+                      </a>
+                    </div>
+                  )}
+                  {volunteer.notes && (
+                    <p className="text-xs pt-1 italic">{volunteer.notes}</p>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+
+  const ItemsTab = () => (
+    <div className="grid gap-6 lg:grid-cols-[65%_35%]">
+      {/* Left column - Packages */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Packages</h2>
+          <AddPackageDialog eventId={eventId} onPackageAdded={() => mutate()} />
+        </div>
+        
+        {packages.length === 0 ? (
+          <Card>
+            <CardContent className="py-12">
+              <Empty>
+                <EmptyMedia variant="icon">
+                  <PackageIcon className="h-6 w-6" />
+                </EmptyMedia>
+                <EmptyTitle>No packages yet</EmptyTitle>
+                <EmptyDescription>
+                  Add your first package to start organizing items
+                </EmptyDescription>
+              </Empty>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {packages.map((pkg) => {
+              const pkgItems = items.filter((item) => item.package_id === pkg.id)
+              return (
+                <PackageCard
+                  key={pkg.id}
+                  pkg={pkg}
+                  items={pkgItems}
+                  volunteers={volunteers}
+                  onUpdate={() => mutate()}
+                />
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Right column - Unassigned Items & At Risk */}
+      <div className="space-y-4">
+        {/* Unassigned Items */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Unassigned Items</CardTitle>
+              <AddItemDialog 
+                eventId={eventId} 
+                packages={packages} 
+                volunteers={volunteers}
+                onItemAdded={() => mutate()} 
+                onVolunteerAdded={() => mutate()}
+              />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {unassignedItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No unassigned items
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {unassignedItems.map((item) => (
+                  <ItemRow key={item.id} item={item} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* At Risk Items */}
+        <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-4 w-4" />
+              At Risk
+            </CardTitle>
+            <CardDescription>
+              Pledged items that need follow-up
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {atRiskItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No items at risk
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {atRiskItems.map((item) => (
+                  <ItemRow key={item.id} item={item} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 
@@ -304,98 +512,19 @@ export function EventDetail({ eventId }: EventDetailProps) {
             </Card>
           </div>
 
-          {/* Two-column layout */}
-          <div className="grid gap-6 lg:grid-cols-[65%_35%]">
-            {/* Left column - Packages */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Packages</h2>
-                <AddPackageDialog eventId={eventId} onPackageAdded={() => mutate()} />
-              </div>
-              
-              {packages.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12">
-                    <Empty>
-                      <EmptyMedia variant="icon">
-                        <PackageIcon className="h-6 w-6" />
-                      </EmptyMedia>
-                      <EmptyTitle>No packages yet</EmptyTitle>
-                      <EmptyDescription>
-                        Add your first package to start organizing items
-                      </EmptyDescription>
-                    </Empty>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-3">
-                  {packages.map((pkg) => {
-                    const pkgItems = items.filter((item) => item.package_id === pkg.id)
-                    return (
-                      <PackageCard
-                        key={pkg.id}
-                        pkg={pkg}
-                        items={pkgItems}
-                        onUpdate={() => mutate()}
-                      />
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Right column - Unassigned Items & At Risk */}
-            <div className="space-y-4">
-              {/* Unassigned Items */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">Unassigned Items</CardTitle>
-                    <AddItemDialog eventId={eventId} packages={packages} onItemAdded={() => mutate()} />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {unassignedItems.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No unassigned items
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {unassignedItems.map((item) => (
-                        <ItemRow key={item.id} item={item} />
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* At Risk Items */}
-              <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                    <AlertTriangle className="h-4 w-4" />
-                    At Risk
-                  </CardTitle>
-                  <CardDescription>
-                    Items with &quot;expected&quot; status that need follow-up
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {atRiskItems.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No items at risk
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {atRiskItems.map((item) => (
-                        <ItemRow key={item.id} item={item} />
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+          {/* Tabs */}
+          <Tabs defaultValue="items" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="items">Items & Packages</TabsTrigger>
+              <TabsTrigger value="volunteers">Volunteers ({volunteers.length})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="items">
+              <ItemsTab />
+            </TabsContent>
+            <TabsContent value="volunteers">
+              <VolunteersTab />
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
     </div>
