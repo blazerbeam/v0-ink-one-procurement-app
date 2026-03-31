@@ -58,10 +58,12 @@ export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVo
     const supabase = createClient()
 
     // Get owner name from volunteer if selected
-    const selectedVolunteer = volunteers.find(v => v.id === formData.owner_id)
+    const ownerId = formData.owner_id && formData.owner_id !== "none" ? formData.owner_id : null
+    const selectedVolunteer = ownerId ? volunteers.find(v => v.id === ownerId) : null
     const ownerName = selectedVolunteer 
       ? `${selectedVolunteer.first_name} ${selectedVolunteer.last_name}`
       : null
+    const packageId = formData.package_id && formData.package_id !== "none" ? formData.package_id : null
 
     const { error } = await supabase.from("items").insert({
       event_id: eventId,
@@ -70,9 +72,9 @@ export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVo
       donor_name: formData.donor_name.trim() || null,
       estimated_value: formData.estimated_value ? Number(formData.estimated_value) : null,
       status: formData.status,
-      owner_id: formData.owner_id || null,
+      owner_id: ownerId,
       owner_name: ownerName,
-      package_id: formData.package_id || null,
+      package_id: packageId,
     })
 
     setIsSubmitting(false)
@@ -182,7 +184,7 @@ export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVo
                       <SelectValue placeholder="Select volunteer" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Unassigned</SelectItem>
+                      <SelectItem value="none">Unassigned</SelectItem>
                       {volunteers.map((volunteer) => (
                         <SelectItem key={volunteer.id} value={volunteer.id}>
                           {volunteer.first_name} {volunteer.last_name}
@@ -209,7 +211,7 @@ export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVo
                     <SelectValue placeholder="Select a package" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No Package</SelectItem>
+                    <SelectItem value="none">No Package</SelectItem>
                     {packages.map((pkg) => (
                       <SelectItem key={pkg.id} value={pkg.id}>
                         {pkg.name}
