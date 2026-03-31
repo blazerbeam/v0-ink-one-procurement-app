@@ -2,6 +2,7 @@
 
 import useSWR from "swr"
 import { PartyPopper } from "lucide-react"
+
 import { createClient } from "@/lib/supabase/client"
 import { EventCard } from "@/components/event-card"
 import { CreateEventDialog } from "@/components/create-event-dialog"

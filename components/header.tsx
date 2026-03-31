@@ -13,7 +13,7 @@ export function Header() {
           <span className="text-xl font-semibold text-foreground">inKind</span>
         </div>
         <p className="hidden text-sm text-muted-foreground sm:block">
-          Nonprofit Gala Procurement
+          in-kind procurement
         </p>
       </div>
     </header>
