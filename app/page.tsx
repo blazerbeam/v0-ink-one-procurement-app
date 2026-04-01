@@ -10,22 +10,36 @@ export default function LandingPage() {
   const [email, setEmail] = useState("")
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
+
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email) return
+    setError("")
+    
+    if (!email || !isValidEmail(email)) {
+      setError("Please enter a valid email address.")
+      return
+    }
     
     setSubmitting(true)
     try {
-      await fetch("/api/waitlist", {
+      const response = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       })
+      
+      if (!response.ok) {
+        throw new Error("Failed to submit")
+      }
+      
       setSubmitted(true)
     } catch {
-      // Still show success for UX
-      setSubmitted(true)
+      setError("Something went wrong. Please try again.")
     }
     setSubmitting(false)
   }
@@ -258,23 +272,30 @@ export default function LandingPage() {
               </p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-              <Input
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="bg-white border-0 h-12 text-gray-900 placeholder:text-gray-500"
-                required
-              />
-              <Button 
-                type="submit" 
-                disabled={submitting}
-                className="bg-gray-900 hover:bg-gray-800 text-white h-12 px-6 whitespace-nowrap"
-              >
-                {submitting ? "Submitting..." : "Request Access"}
-              </Button>
-            </form>
+            <div className="max-w-md mx-auto">
+              <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+                <Input
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setError(""); }}
+                  className="bg-white border-0 h-12 text-gray-900 placeholder:text-gray-500"
+                  required
+                />
+                <Button 
+                  type="submit" 
+                  disabled={submitting}
+                  className="bg-gray-900 hover:bg-gray-800 text-white h-12 px-6 whitespace-nowrap"
+                >
+                  {submitting ? "Submitting..." : "Request Access"}
+                </Button>
+              </form>
+              {error && (
+                <p className="mt-3 text-white/90 text-sm bg-red-500/20 rounded-lg px-4 py-2">
+                  {error}
+                </p>
+              )}
+            </div>
           )}
           
           <p className="mt-6 text-green-100 text-sm">
