@@ -87,7 +87,7 @@ export function OutreachEmailSheet({
   // Reset and populate form when item/event changes
   useEffect(() => {
     if (item && event) {
-      setBusinessName(item.donor_name || "")
+      setBusinessName(item.business_name || item.donor_name || "")
       setSpecificAsk(item.name || "")
       setSenderName(ownerName)
       setOrgName(event.org_name || "")
@@ -190,7 +190,7 @@ export function OutreachEmailSheet({
     const supabase = createClient()
     await supabase
       .from("items")
-      .update({ status: "confirmed" })
+      .update({ status: "contacted" })
       .eq("id", item.id)
     
     onUpdate?.()
@@ -207,7 +207,7 @@ export function OutreachEmailSheet({
           </SheetTitle>
           <SheetDescription>
             {item?.name}
-            {item?.donor_name && ` - ${item.donor_name}`}
+            {(item?.business_name || item?.donor_name) && ` - ${item.business_name || item.donor_name}`}
           </SheetDescription>
         </SheetHeader>
 

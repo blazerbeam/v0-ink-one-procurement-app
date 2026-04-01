@@ -31,7 +31,7 @@ interface DraggablePackageCardProps {
   isDragOver?: boolean
 }
 
-const statusOptions: ItemStatus[] = ["expected", "confirmed", "received", "missing", "fulfilled"]
+const statusOptions: ItemStatus[] = ["expected", "contacted", "confirmed", "received", "missing", "fulfilled"]
 
 export function DraggablePackageCard({ 
   pkg, 
