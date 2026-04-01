@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Spinner } from "@/components/ui/spinner"
+import { Progress } from "@/components/ui/progress"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Item, Event, Volunteer } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
@@ -28,6 +28,15 @@ interface OutreachEmailSheetProps {
 }
 
 type Tone = "professional" | "friendly" | "enthusiastic" | "parentToParent"
+
+const loadingMessages = [
+  "Crafting the perfect opening...",
+  "Adding a personal touch...",
+  "Polishing the ask...",
+  "Making it compelling...",
+  "Adding warmth and sincerity...",
+  "Finalizing all four versions...",
+]
 
 interface EmailVersion {
   subject: string
@@ -69,6 +78,8 @@ export function OutreachEmailSheet({
   const [isGenerating, setIsGenerating] = useState(false)
   const [allEmails, setAllEmails] = useState<AllEmails | null>(null)
   const [copied, setCopied] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0])
 
   // Get current email based on selected tone
   const currentEmail = allEmails ? allEmails[tone] : null
@@ -86,8 +97,39 @@ export function OutreachEmailSheet({
     }
   }, [item, event, ownerName])
 
+  // Progress animation during generation
+  useEffect(() => {
+    if (!isGenerating) {
+      setProgress(0)
+      return
+    }
+
+    // Progress bar animation - smooth increase
+    const progressInterval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 90) return prev
+        return prev + Math.random() * 8
+      })
+    }, 500)
+
+    // Rotating messages every 2 seconds
+    let messageIndex = 0
+    const messageInterval = setInterval(() => {
+      messageIndex = (messageIndex + 1) % loadingMessages.length
+      setLoadingMessage(loadingMessages[messageIndex])
+    }, 2000)
+
+    return () => {
+      clearInterval(progressInterval)
+      clearInterval(messageInterval)
+    }
+  }, [isGenerating])
+
   const handleGenerate = async () => {
     setIsGenerating(true)
+    setProgress(0)
+    setLoadingMessage(loadingMessages[0])
+    
     try {
       const response = await fetch("/api/generate-email", {
         method: "POST",
@@ -114,6 +156,13 @@ export function OutreachEmailSheet({
       }
 
       const result = await response.json()
+      
+      // Complete the progress bar
+      setProgress(100)
+      
+      // Short delay to show 100% before hiding
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
       setAllEmails({
         professional: result.professional || { subject: "", body: "" },
         friendly: result.friendly || { subject: "", body: "" },
@@ -247,15 +296,18 @@ export function OutreachEmailSheet({
             disabled={isGenerating || !businessName || !specificAsk}
             className="w-full bg-primary hover:bg-primary/90"
           >
-            {isGenerating ? (
-              <>
-                <Spinner className="mr-2 h-4 w-4 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              "Generate Email"
-            )}
+            {isGenerating ? "Generating..." : "Generate Email"}
           </Button>
+
+          {/* Loading Progress */}
+          {isGenerating && (
+            <div className="space-y-3">
+              <Progress value={progress} className="h-2" />
+              <p className="text-sm text-muted-foreground text-center animate-pulse">
+                {loadingMessage}
+              </p>
+            </div>
+          )}
 
           {/* Email Output */}
           {allEmails && currentEmail && (
