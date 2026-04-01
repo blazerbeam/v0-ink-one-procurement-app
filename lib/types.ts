@@ -12,6 +12,15 @@ export interface Event {
   status: 'upcoming' | 'active' | 'completed'
   created_at: string
   updated_at: string
+  // Organization profile fields
+  legal_name: string | null
+  dba_name: string | null
+  org_address: string | null
+  tax_id: string | null
+  contact_name: string | null
+  contact_email: string | null
+  contact_phone: string | null
+  website: string | null
 }
 
 export interface EventFormData {
@@ -22,6 +31,15 @@ export interface EventFormData {
   event_date: string
   guest_count: number | string
   fundraising_goal: number | string
+  // Organization profile fields
+  legal_name: string
+  dba_name: string
+  org_address: string
+  tax_id: string
+  contact_name: string
+  contact_email: string
+  contact_phone: string
+  website: string
 }
 
 export type ItemStatus = 'expected' | 'confirmed' | 'received' | 'missing' | 'fulfilled'

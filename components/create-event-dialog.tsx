@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus } from "lucide-react"
+import { ChevronDown, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -15,6 +15,11 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { createClient } from "@/lib/supabase/client"
 import type { EventFormData } from "@/lib/types"
 
@@ -25,6 +30,7 @@ interface CreateEventDialogProps {
 export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [formData, setFormData] = useState<EventFormData>({
     org_name: "",
     event_name: "",
@@ -33,6 +39,15 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
     event_date: "",
     guest_count: "",
     fundraising_goal: "",
+    // Organization profile fields
+    legal_name: "",
+    dba_name: "",
+    org_address: "",
+    tax_id: "",
+    contact_name: "",
+    contact_email: "",
+    contact_phone: "",
+    website: "",
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,6 +68,15 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
         items_secured: 0,
         total_items: 0,
         status: "upcoming",
+        // Organization profile fields
+        legal_name: formData.legal_name || null,
+        dba_name: formData.dba_name || null,
+        org_address: formData.org_address || null,
+        tax_id: formData.tax_id || null,
+        contact_name: formData.contact_name || null,
+        contact_email: formData.contact_email || null,
+        contact_phone: formData.contact_phone || null,
+        website: formData.website || null,
       })
 
       if (error) throw error
@@ -65,8 +89,17 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
         event_date: "",
         guest_count: "",
         fundraising_goal: "",
+        legal_name: "",
+        dba_name: "",
+        org_address: "",
+        tax_id: "",
+        contact_name: "",
+        contact_email: "",
+        contact_phone: "",
+        website: "",
       })
       setOpen(false)
+      setProfileOpen(false)
       onEventCreated()
     } catch (error) {
       console.error("Error creating event:", error)
@@ -186,6 +219,120 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
               </Field>
             </div>
           </FieldGroup>
+
+          {/* Organization Profile - Collapsible */}
+          <Collapsible open={profileOpen} onOpenChange={setProfileOpen} className="mt-6">
+            <CollapsibleTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                className="flex w-full items-center justify-between p-0 font-semibold hover:bg-transparent"
+              >
+                <span>Organization Profile (for Donation Letters)</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${profileOpen ? "rotate-180" : ""}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-4">
+              <p className="text-sm text-muted-foreground mb-4">
+                This information will be used to generate professional donation acknowledgment letters.
+              </p>
+              <FieldGroup>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel htmlFor="legal_name">Legal Name</FieldLabel>
+                    <Input
+                      id="legal_name"
+                      name="legal_name"
+                      value={formData.legal_name}
+                      onChange={handleChange}
+                      placeholder="Full legal name"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="dba_name">DBA Name</FieldLabel>
+                    <Input
+                      id="dba_name"
+                      name="dba_name"
+                      value={formData.dba_name}
+                      onChange={handleChange}
+                      placeholder="Doing business as"
+                    />
+                  </Field>
+                </div>
+
+                <Field>
+                  <FieldLabel htmlFor="org_address">Address</FieldLabel>
+                  <Textarea
+                    id="org_address"
+                    name="org_address"
+                    value={formData.org_address}
+                    onChange={handleChange}
+                    placeholder="Full mailing address"
+                    rows={2}
+                  />
+                </Field>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel htmlFor="tax_id">Tax ID / EIN</FieldLabel>
+                    <Input
+                      id="tax_id"
+                      name="tax_id"
+                      value={formData.tax_id}
+                      onChange={handleChange}
+                      placeholder="XX-XXXXXXX"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="website">Website</FieldLabel>
+                    <Input
+                      id="website"
+                      name="website"
+                      value={formData.website}
+                      onChange={handleChange}
+                      placeholder="https://..."
+                    />
+                  </Field>
+                </div>
+
+                <Field>
+                  <FieldLabel htmlFor="contact_name">Primary Contact Name</FieldLabel>
+                  <Input
+                    id="contact_name"
+                    name="contact_name"
+                    value={formData.contact_name}
+                    onChange={handleChange}
+                    placeholder="Full name"
+                  />
+                </Field>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel htmlFor="contact_email">Contact Email</FieldLabel>
+                    <Input
+                      id="contact_email"
+                      name="contact_email"
+                      type="email"
+                      value={formData.contact_email}
+                      onChange={handleChange}
+                      placeholder="email@org.com"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="contact_phone">Contact Phone</FieldLabel>
+                    <Input
+                      id="contact_phone"
+                      name="contact_phone"
+                      type="tel"
+                      value={formData.contact_phone}
+                      onChange={handleChange}
+                      placeholder="(555) 123-4567"
+                    />
+                  </Field>
+                </div>
+              </FieldGroup>
+            </CollapsibleContent>
+          </Collapsible>
 
           <div className="mt-6 flex justify-end gap-3">
             <Button
