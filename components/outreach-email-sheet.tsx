@@ -242,8 +242,8 @@ export function OutreachEmailSheet({
           >
             {isGenerating ? (
               <>
-                <Spinner className="mr-2 h-4 w-4" />
-                Generating all tones...
+                <Spinner className="mr-2 h-4 w-4 animate-spin" />
+                Generating...
               </>
             ) : (
               "Generate Email"
