@@ -18,10 +18,13 @@ export async function POST(request: Request) {
     // For now, just return success - we can connect to Tally or a DB later
     const { error } = await supabase
       .from("waitlist")
-      .insert({ email: email.toLowerCase().trim() })
+      .insert({ 
+        email: email.toLowerCase().trim(),
+        type: "organizer"
+      })
 
     if (error) {
-      // If table doesn't exist or duplicate, still return success for UX
+      // Log but still return success for duplicate emails
       console.log("Waitlist insert:", error.message)
     }
 
