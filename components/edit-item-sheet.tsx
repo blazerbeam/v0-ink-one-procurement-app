@@ -70,6 +70,22 @@ export function EditItemSheet({
   // Update form data when item changes
   useEffect(() => {
     if (item) {
+      // Try to match owner_id first, otherwise try to find volunteer by owner_name text
+      let ownerId = item.owner_id || "none"
+      if (ownerId === "none" && item.owner_name) {
+        // Try to find a volunteer matching the owner_name text
+        const matchingVolunteer = volunteers.find(v => {
+          const fullName = `${v.first_name} ${v.last_name}`.toLowerCase()
+          const ownerNameLower = item.owner_name?.toLowerCase() || ""
+          return fullName === ownerNameLower || 
+                 v.first_name.toLowerCase() === ownerNameLower ||
+                 v.last_name.toLowerCase() === ownerNameLower
+        })
+        if (matchingVolunteer) {
+          ownerId = matchingVolunteer.id
+        }
+      }
+      
       setFormData({
         name: item.name || "",
         description: item.description || "",
@@ -77,11 +93,11 @@ export function EditItemSheet({
         contact_name: item.contact_name || "",
         estimated_value: item.estimated_value?.toString() || "",
         status: item.status,
-        owner_id: item.owner_id || "none",
+        owner_id: ownerId,
         package_id: item.package_id || "none",
       })
     }
-  }, [item])
+  }, [item, volunteers])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
