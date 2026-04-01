@@ -94,13 +94,20 @@ export function OutreachEmailSheet({
       setIsLoading(true)
       const supabase = createClient()
       
+      console.log("[v0] Loading outreach for item:", item.id)
+      
       const { data, error } = await supabase
         .from("outreach")
         .select("*")
         .eq("item_id", item.id)
         .maybeSingle()
 
+      if (error) {
+        console.error("[v0] Supabase load error:", error)
+      }
+
       if (!error && data && data.generated_at) {
+        console.log("[v0] Found existing outreach:", data)
         // Found existing record with generated emails
         setAllEmails({
           professional: {
@@ -174,12 +181,17 @@ export function OutreachEmailSheet({
   }, [isGenerating])
 
   const saveOutreachToSupabase = async (emails: AllEmails) => {
-    if (!item?.id) return
+    if (!item?.id) {
+      console.error("[v0] Cannot save outreach: item.id is missing")
+      return
+    }
 
     const supabase = createClient()
     const now = new Date().toISOString()
 
-    await supabase
+    console.log("[v0] Saving outreach for item:", item.id)
+
+    const { error } = await supabase
       .from("outreach")
       .upsert({
         item_id: item.id,
@@ -192,9 +204,15 @@ export function OutreachEmailSheet({
         email_parenttoparent_subject: emails.parentToParent.subject,
         email_parenttoparent_body: emails.parentToParent.body,
         generated_at: now,
+        status: "generated",
       }, { onConflict: "item_id" })
 
-    setGeneratedAt(now)
+    if (error) {
+      console.error("[v0] Supabase upsert error:", error)
+    } else {
+      console.log("[v0] Outreach saved successfully")
+      setGeneratedAt(now)
+    }
   }
 
   const handleGenerate = async () => {
