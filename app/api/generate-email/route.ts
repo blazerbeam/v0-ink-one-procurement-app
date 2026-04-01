@@ -6,31 +6,34 @@ export async function POST(req: Request) {
       event_name, 
       business_name, 
       specific_ask, 
-      sender_name, 
-      tone 
+      sender_name
     } = await req.json()
 
-    const systemPrompt = `You are helping a nonprofit volunteer write a donation request email for their fundraising gala. Write a compelling, concise outreach email requesting an in-kind donation.
+    const systemPrompt = `You are helping a nonprofit volunteer write donation request emails for their fundraising gala. Generate FOUR versions of the same outreach email, one for each tone style below.
 
-Tone guidance:
-- Professional: formal, respectful, brief
+Tone descriptions:
+- Professional: formal, respectful, brief, business-appropriate
 - Friendly: warm, conversational, community-focused  
-- Enthusiastic: energetic, passionate about the cause
-- Parent-to-Parent: personal, peer-to-peer, 'we're all in this together' feel
+- Enthusiastic: energetic, passionate about the cause, uses exclamation points
+- Parent-to-Parent: personal, peer-to-peer, 'we're all in this together' feel, casual
 
 IMPORTANT: Respond with ONLY a valid JSON object in this exact format, no other text:
-{"subject": "your subject line here", "body": "your email body here"}`
+{
+  "professional": { "subject": "subject line", "body": "email body" },
+  "friendly": { "subject": "subject line", "body": "email body" },
+  "enthusiastic": { "subject": "subject line", "body": "email body" },
+  "parentToParent": { "subject": "subject line", "body": "email body" }
+}`
 
-    const userPrompt = `Write an outreach email with these details:
+    const userPrompt = `Write four versions of an outreach email (one per tone) with these details:
 Organization: ${org_name}
 Mission: ${mission || "Supporting our community"}
 Event: ${event_name}
 Donor/Business: ${business_name}
 Specific Ask: ${specific_ask}
 Sender Name: ${sender_name}
-Tone: ${tone}
 
-Remember to respond with ONLY the JSON object.`
+Remember to respond with ONLY the JSON object containing all four versions.`
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -41,7 +44,7 @@ Remember to respond with ONLY the JSON object.`
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
+        max_tokens: 2500,
         system: systemPrompt,
         messages: [
           { role: "user", content: userPrompt }
@@ -66,7 +69,14 @@ Remember to respond with ONLY the JSON object.`
     }
 
     const parsed = JSON.parse(jsonMatch[0])
-    return Response.json({ subject: parsed.subject, body: parsed.body })
+    
+    // Return all four tone versions
+    return Response.json({
+      professional: parsed.professional,
+      friendly: parsed.friendly,
+      enthusiastic: parsed.enthusiastic,
+      parentToParent: parsed.parentToParent
+    })
 
   } catch (error) {
     console.error("[v0] Generate email error:", error)

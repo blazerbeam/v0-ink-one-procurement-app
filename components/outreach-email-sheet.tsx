@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Copy, Mail, RefreshCw, X, Check } from "lucide-react"
+import { Copy, Mail, RefreshCw, Check } from "lucide-react"
 import {
   Sheet,
   SheetContent,
@@ -27,7 +27,19 @@ interface OutreachEmailSheetProps {
   onUpdate?: () => void
 }
 
-type Tone = "professional" | "friendly" | "enthusiastic" | "parent-to-parent"
+type Tone = "professional" | "friendly" | "enthusiastic" | "parentToParent"
+
+interface EmailVersion {
+  subject: string
+  body: string
+}
+
+interface AllEmails {
+  professional: EmailVersion
+  friendly: EmailVersion
+  enthusiastic: EmailVersion
+  parentToParent: EmailVersion
+}
 
 export function OutreachEmailSheet({
   item,
@@ -53,12 +65,13 @@ export function OutreachEmailSheet({
   const [mission, setMission] = useState("")
   const [tone, setTone] = useState<Tone>("friendly")
 
-  // Generation state
+  // Generation state - store all four versions
   const [isGenerating, setIsGenerating] = useState(false)
-  const [subject, setSubject] = useState("")
-  const [body, setBody] = useState("")
+  const [allEmails, setAllEmails] = useState<AllEmails | null>(null)
   const [copied, setCopied] = useState(false)
-  const [hasGenerated, setHasGenerated] = useState(false)
+
+  // Get current email based on selected tone
+  const currentEmail = allEmails ? allEmails[tone] : null
 
   // Reset and populate form when item/event changes
   useEffect(() => {
@@ -68,9 +81,7 @@ export function OutreachEmailSheet({
       setSenderName(ownerName)
       setOrgName(event.org_name || "")
       setMission(event.mission || "")
-      setSubject("")
-      setBody("")
-      setHasGenerated(false)
+      setAllEmails(null)
       setTone("friendly")
     }
   }, [item, event, ownerName])
@@ -88,7 +99,6 @@ export function OutreachEmailSheet({
           business_name: businessName,
           specific_ask: specificAsk,
           sender_name: senderName,
-          tone: tone,
         }),
       })
       
@@ -97,9 +107,12 @@ export function OutreachEmailSheet({
       }
 
       const result = await response.json()
-      setSubject(result.subject || "")
-      setBody(result.body || "")
-      setHasGenerated(true)
+      setAllEmails({
+        professional: result.professional || { subject: "", body: "" },
+        friendly: result.friendly || { subject: "", body: "" },
+        enthusiastic: result.enthusiastic || { subject: "", body: "" },
+        parentToParent: result.parentToParent || { subject: "", body: "" },
+      })
     } catch (error) {
       console.error("Error generating email:", error)
     } finally {
@@ -108,7 +121,8 @@ export function OutreachEmailSheet({
   }
 
   const handleCopyEmail = () => {
-    const emailText = `Subject: ${subject}\n\n${body}`
+    if (!currentEmail) return
+    const emailText = `Subject: ${currentEmail.subject}\n\n${currentEmail.body}`
     navigator.clipboard.writeText(emailText)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -214,7 +228,7 @@ export function OutreachEmailSheet({
               <ToggleGroupItem value="enthusiastic" className="px-3 py-1.5 text-sm">
                 Enthusiastic
               </ToggleGroupItem>
-              <ToggleGroupItem value="parent-to-parent" className="px-3 py-1.5 text-sm">
+              <ToggleGroupItem value="parentToParent" className="px-3 py-1.5 text-sm">
                 Parent-to-Parent
               </ToggleGroupItem>
             </ToggleGroup>
@@ -229,7 +243,7 @@ export function OutreachEmailSheet({
             {isGenerating ? (
               <>
                 <Spinner className="mr-2 h-4 w-4" />
-                Generating...
+                Generating all tones...
               </>
             ) : (
               "Generate Email"
@@ -237,14 +251,15 @@ export function OutreachEmailSheet({
           </Button>
 
           {/* Email Output */}
-          {hasGenerated && (
+          {allEmails && currentEmail && (
             <div className="space-y-4 pt-4 border-t">
               <div className="space-y-2">
                 <Label htmlFor="subject">Subject Line</Label>
                 <Input
                   id="subject"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
+                  value={currentEmail.subject}
+                  readOnly
+                  className="bg-muted"
                 />
               </div>
 
@@ -252,10 +267,10 @@ export function OutreachEmailSheet({
                 <Label htmlFor="emailBody">Email Body</Label>
                 <Textarea
                   id="emailBody"
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
+                  value={currentEmail.body}
+                  readOnly
                   rows={10}
-                  className="resize-y"
+                  className="resize-y bg-muted"
                 />
               </div>
 
@@ -292,7 +307,7 @@ export function OutreachEmailSheet({
                 className="w-full text-muted-foreground"
               >
                 <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? "animate-spin" : ""}`} />
-                Regenerate
+                Regenerate All Tones
               </Button>
             </div>
           )}
