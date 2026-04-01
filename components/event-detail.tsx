@@ -2,6 +2,7 @@
 
 import useSWR from "swr"
 import Link from "next/link"
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd"
 import { createClient } from "@/lib/supabase/client"
 import { Event, Item, Package, Volunteer, ItemStatus, STATUS_LABELS } from "@/lib/types"
 import { Header } from "@/components/header"
@@ -13,7 +14,7 @@ import { AddItemDialog } from "@/components/add-item-dialog"
 import { AddPackageDialog } from "@/components/add-package-dialog"
 import { AddVolunteerDialog } from "@/components/add-volunteer-dialog"
 import { EditItemSheet } from "@/components/edit-item-sheet"
-import { PackageCard } from "@/components/package-card"
+import { DraggablePackageCard } from "@/components/draggable-package-card"
 import { ItemStatusBadge } from "@/components/item-status-badge"
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -35,6 +36,7 @@ import {
   Calendar,
   ChevronDown,
   DollarSign,
+  GripVertical,
   Mail,
   MapPin,
   MoreHorizontal,
@@ -132,6 +134,35 @@ export function EventDetail({ eventId }: EventDetailProps) {
     mutate()
   }
 
+  const handleDragEnd = async (result: DropResult) => {
+    const { destination, source, draggableId } = result
+
+    // Dropped outside any droppable
+    if (!destination) return
+
+    // Dropped in same position
+    if (
+      destination.droppableId === source.droppableId &&
+      destination.index === source.index
+    ) return
+
+    // Extract the target package ID from droppableId
+    // Format is "package-{uuid}" or "unassigned"
+    let newPackageId: string | null = null
+    if (destination.droppableId.startsWith("package-")) {
+      newPackageId = destination.droppableId.replace("package-", "")
+    }
+
+    // Update the item's package_id in the database
+    const supabase = createClient()
+    await supabase
+      .from("items")
+      .update({ package_id: newPackageId })
+      .eq("id", draggableId)
+
+    mutate()
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -170,68 +201,83 @@ export function EventDetail({ eventId }: EventDetailProps) {
     )
   }
 
-  const ItemRow = ({ item }: { item: Item }) => {
+  const DraggableItemRow = ({ item, index }: { item: Item; index: number }) => {
     const ownerName = getVolunteerName(item.owner_id) || item.owner_name
     return (
-      <div
-        onClick={() => setEditingItem(item)}
-        className={`flex items-center justify-between py-2 px-3 rounded-md bg-muted/50 cursor-pointer hover:bg-muted transition-colors ${
-          updatingId === item.id ? "opacity-50" : ""
-        }`}
-      >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium truncate">{item.name}</span>
-            <ItemStatusBadge status={item.status} />
-          </div>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            {item.donor_name && <span>{item.donor_name}</span>}
-            {item.estimated_value && (
-              <span className="font-medium text-foreground">
-                ${item.estimated_value.toLocaleString()}
-              </span>
-            )}
-            {ownerName && (
-              <span className="flex items-center gap-1">
-                <UserCircle className="h-3 w-3" />
-                {ownerName}
-              </span>
-            )}
-          </div>
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8 shrink-0"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-              <span className="sr-only">Item actions</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {statusOptions.map((status) => (
-              <DropdownMenuItem
-                key={status}
-                onClick={() => updateStatus(item.id, status)}
-                disabled={item.status === status}
+      <Draggable draggableId={item.id} index={index}>
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.draggableProps}
+            onClick={() => setEditingItem(item)}
+            className={`flex items-center justify-between py-2 px-3 rounded-md bg-muted/50 cursor-pointer hover:bg-muted transition-colors ${
+              updatingId === item.id ? "opacity-50" : ""
+            } ${snapshot.isDragging ? "shadow-lg ring-2 ring-primary bg-background" : ""}`}
+          >
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div
+                {...provided.dragHandleProps}
+                className="cursor-grab active:cursor-grabbing p-1 -ml-1 hover:bg-muted rounded"
+                onClick={(e) => e.stopPropagation()}
               >
-                Mark as {STATUS_LABELS[status]}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => deleteItem(item.id)}
-              className="text-destructive"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+                <GripVertical className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium truncate">{item.name}</span>
+                  <ItemStatusBadge status={item.status} />
+                </div>
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  {item.donor_name && <span>{item.donor_name}</span>}
+                  {item.estimated_value && (
+                    <span className="font-medium text-foreground">
+                      ${item.estimated_value.toLocaleString()}
+                    </span>
+                  )}
+                  {ownerName && (
+                    <span className="flex items-center gap-1">
+                      <UserCircle className="h-3 w-3" />
+                      {ownerName}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                  <span className="sr-only">Item actions</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {statusOptions.map((status) => (
+                  <DropdownMenuItem
+                    key={status}
+                    onClick={() => updateStatus(item.id, status)}
+                    disabled={item.status === status}
+                  >
+                    Mark as {STATUS_LABELS[status]}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => deleteItem(item.id)}
+                  className="text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+      </Draggable>
     )
   }
 
@@ -320,105 +366,148 @@ export function EventDetail({ eventId }: EventDetailProps) {
   )
 
   const ItemsTab = () => (
-    <div className="grid gap-6 lg:grid-cols-[65%_35%]">
-      {/* Left column - Packages */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Packages</h2>
-          <AddPackageDialog eventId={eventId} onPackageAdded={() => mutate()} />
+    <DragDropContext onDragEnd={handleDragEnd}>
+      <div className="grid gap-6 lg:grid-cols-[65%_35%]">
+        {/* Left column - Packages */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Packages</h2>
+            <AddPackageDialog eventId={eventId} onPackageAdded={() => mutate()} />
+          </div>
+          
+          {packages.length === 0 ? (
+            <Card>
+              <CardContent className="py-12">
+                <Empty>
+                  <EmptyMedia variant="icon">
+                    <PackageIcon className="h-6 w-6" />
+                  </EmptyMedia>
+                  <EmptyTitle>No packages yet</EmptyTitle>
+                  <EmptyDescription>
+                    Add your first package to start organizing items
+                  </EmptyDescription>
+                </Empty>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {packages.map((pkg) => {
+                const pkgItems = items.filter((item) => item.package_id === pkg.id)
+                return (
+                  <DraggablePackageCard
+                    key={pkg.id}
+                    pkg={pkg}
+                    items={pkgItems}
+                    volunteers={volunteers}
+                    onUpdate={() => mutate()}
+                    onItemClick={(item) => setEditingItem(item)}
+                  />
+                )
+              })}
+            </div>
+          )}
         </div>
-        
-        {packages.length === 0 ? (
-          <Card>
-            <CardContent className="py-12">
-              <Empty>
-                <EmptyMedia variant="icon">
-                  <PackageIcon className="h-6 w-6" />
-                </EmptyMedia>
-                <EmptyTitle>No packages yet</EmptyTitle>
-                <EmptyDescription>
-                  Add your first package to start organizing items
-                </EmptyDescription>
-              </Empty>
+
+        {/* Right column - Unassigned Items & At Risk */}
+        <div className="space-y-4">
+          {/* Unassigned Items */}
+          <Droppable droppableId="unassigned" type="ITEM">
+            {(provided, snapshot) => (
+              <Card className={`transition-all duration-200 ${
+                snapshot.isDraggingOver ? "ring-2 ring-primary border-primary bg-primary/5" : ""
+              }`}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Unassigned Items</CardTitle>
+                    <AddItemDialog 
+                      eventId={eventId} 
+                      packages={packages} 
+                      volunteers={volunteers}
+                      onItemAdded={() => mutate()} 
+                      onVolunteerAdded={() => mutate()}
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="min-h-[60px]"
+                  >
+                    {unassignedItems.length === 0 && !snapshot.isDraggingOver ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No unassigned items
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {unassignedItems.map((item, index) => (
+                          <DraggableItemRow key={item.id} item={item} index={index} />
+                        ))}
+                      </div>
+                    )}
+                    {provided.placeholder}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </Droppable>
+
+          {/* At Risk Items - Read only, not droppable */}
+          <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="h-4 w-4" />
+                At Risk
+              </CardTitle>
+              <CardDescription>
+                Expected items that need follow-up
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {atRiskItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No items at risk
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {atRiskItems.map((item) => {
+                    const ownerName = getVolunteerName(item.owner_id) || item.owner_name
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => setEditingItem(item)}
+                        className="flex items-center justify-between py-2 px-3 rounded-md bg-amber-100/50 dark:bg-amber-950/30 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium truncate">{item.name}</span>
+                            <ItemStatusBadge status={item.status} />
+                          </div>
+                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                            {item.donor_name && <span>{item.donor_name}</span>}
+                            {item.estimated_value && (
+                              <span className="font-medium text-foreground">
+                                ${item.estimated_value.toLocaleString()}
+                              </span>
+                            )}
+                            {ownerName && (
+                              <span className="flex items-center gap-1">
+                                <UserCircle className="h-3 w-3" />
+                                {ownerName}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
-        ) : (
-          <div className="space-y-3">
-            {packages.map((pkg) => {
-              const pkgItems = items.filter((item) => item.package_id === pkg.id)
-              return (
-                <PackageCard
-                  key={pkg.id}
-                  pkg={pkg}
-                  items={pkgItems}
-                  volunteers={volunteers}
-                  onUpdate={() => mutate()}
-                  onItemClick={(item) => setEditingItem(item)}
-                />
-              )
-            })}
-          </div>
-        )}
+        </div>
       </div>
-
-      {/* Right column - Unassigned Items & At Risk */}
-      <div className="space-y-4">
-        {/* Unassigned Items */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Unassigned Items</CardTitle>
-              <AddItemDialog 
-                eventId={eventId} 
-                packages={packages} 
-                volunteers={volunteers}
-                onItemAdded={() => mutate()} 
-                onVolunteerAdded={() => mutate()}
-              />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {unassignedItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No unassigned items
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {unassignedItems.map((item) => (
-                  <ItemRow key={item.id} item={item} />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* At Risk Items */}
-        <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-400">
-              <AlertTriangle className="h-4 w-4" />
-              At Risk
-            </CardTitle>
-            <CardDescription>
-              Pledged items that need follow-up
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {atRiskItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No items at risk
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {atRiskItems.map((item) => (
-                  <ItemRow key={item.id} item={item} />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    </DragDropContext>
   )
 
   return (
