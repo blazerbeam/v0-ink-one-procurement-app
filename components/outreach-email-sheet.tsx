@@ -76,13 +76,62 @@ export function OutreachEmailSheet({
 
   // Generation state - store all four versions
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [allEmails, setAllEmails] = useState<AllEmails | null>(null)
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [progress, setProgress] = useState(0)
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0])
 
   // Get current email based on selected tone
   const currentEmail = allEmails ? allEmails[tone] : null
+
+  // Load existing outreach record when panel opens
+  useEffect(() => {
+    if (!open || !item?.id) return
+
+    const loadExistingOutreach = async () => {
+      setIsLoading(true)
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from("outreach")
+        .select("*")
+        .eq("item_id", item.id)
+        .maybeSingle()
+
+      if (!error && data && data.generated_at) {
+        // Found existing record with generated emails
+        setAllEmails({
+          professional: {
+            subject: data.email_professional_subject || "",
+            body: data.email_professional_body || "",
+          },
+          friendly: {
+            subject: data.email_friendly_subject || "",
+            body: data.email_friendly_body || "",
+          },
+          enthusiastic: {
+            subject: data.email_enthusiastic_subject || "",
+            body: data.email_enthusiastic_body || "",
+          },
+          parentToParent: {
+            subject: data.email_parenttoparent_subject || "",
+            body: data.email_parenttoparent_body || "",
+          },
+        })
+        setGeneratedAt(data.generated_at)
+      } else {
+        // No existing record
+        setAllEmails(null)
+        setGeneratedAt(null)
+      }
+      
+      setIsLoading(false)
+    }
+
+    loadExistingOutreach()
+  }, [open, item?.id])
 
   // Reset and populate form when item/event changes
   useEffect(() => {
@@ -92,7 +141,6 @@ export function OutreachEmailSheet({
       setSenderName(ownerName)
       setOrgName(event.org_name || "")
       setMission(event.mission || "")
-      setAllEmails(null)
       setTone("friendly")
     }
   }, [item, event, ownerName])
@@ -124,6 +172,30 @@ export function OutreachEmailSheet({
       clearInterval(messageInterval)
     }
   }, [isGenerating])
+
+  const saveOutreachToSupabase = async (emails: AllEmails) => {
+    if (!item?.id) return
+
+    const supabase = createClient()
+    const now = new Date().toISOString()
+
+    await supabase
+      .from("outreach")
+      .upsert({
+        item_id: item.id,
+        email_professional_subject: emails.professional.subject,
+        email_professional_body: emails.professional.body,
+        email_friendly_subject: emails.friendly.subject,
+        email_friendly_body: emails.friendly.body,
+        email_enthusiastic_subject: emails.enthusiastic.subject,
+        email_enthusiastic_body: emails.enthusiastic.body,
+        email_parenttoparent_subject: emails.parentToParent.subject,
+        email_parenttoparent_body: emails.parentToParent.body,
+        generated_at: now,
+      }, { onConflict: "item_id" })
+
+    setGeneratedAt(now)
+  }
 
   const handleGenerate = async () => {
     setIsGenerating(true)
@@ -163,12 +235,17 @@ export function OutreachEmailSheet({
       // Short delay to show 100% before hiding
       await new Promise(resolve => setTimeout(resolve, 300))
       
-      setAllEmails({
+      const emails: AllEmails = {
         professional: result.professional || { subject: "", body: "" },
         friendly: result.friendly || { subject: "", body: "" },
         enthusiastic: result.enthusiastic || { subject: "", body: "" },
         parentToParent: result.parentToParent || { subject: "", body: "" },
-      })
+      }
+      
+      setAllEmails(emails)
+      
+      // Save to Supabase
+      await saveOutreachToSupabase(emails)
     } catch (error) {
       console.error("Error generating email:", error)
     } finally {
@@ -197,6 +274,17 @@ export function OutreachEmailSheet({
     onOpenChange(false)
   }
 
+  const formatGeneratedDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    })
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[480px] sm:max-w-[480px] overflow-y-auto">
@@ -212,163 +300,180 @@ export function OutreachEmailSheet({
         </SheetHeader>
 
         <div className="space-y-6 py-6">
-          {/* Context Fields */}
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="businessName">Business/Donor Name</Label>
-              <Input
-                id="businessName"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                placeholder="Enter business or donor name"
-              />
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-sm text-muted-foreground">Loading...</div>
             </div>
+          ) : (
+            <>
+              {/* Context Fields */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="businessName">Business/Donor Name</Label>
+                  <Input
+                    id="businessName"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="Enter business or donor name"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="specificAsk">Specific Ask</Label>
-              <Input
-                id="specificAsk"
-                value={specificAsk}
-                onChange={(e) => setSpecificAsk(e.target.value)}
-                placeholder="e.g., 2 tickets to a home game"
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="specificAsk">Specific Ask</Label>
+                  <Input
+                    id="specificAsk"
+                    value={specificAsk}
+                    onChange={(e) => setSpecificAsk(e.target.value)}
+                    placeholder="e.g., 2 tickets to a home game"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="senderName">Your Name</Label>
-              <Input
-                id="senderName"
-                value={senderName}
-                onChange={(e) => setSenderName(e.target.value)}
-                placeholder="Your name"
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="senderName">Your Name</Label>
+                  <Input
+                    id="senderName"
+                    value={senderName}
+                    onChange={(e) => setSenderName(e.target.value)}
+                    placeholder="Your name"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="orgName">Your Organization</Label>
-              <Input
-                id="orgName"
-                value={orgName}
-                onChange={(e) => setOrgName(e.target.value)}
-                placeholder="Organization name"
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="orgName">Your Organization</Label>
+                  <Input
+                    id="orgName"
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
+                    placeholder="Organization name"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="mission">Your Mission</Label>
-              <Textarea
-                id="mission"
-                value={mission}
-                onChange={(e) => setMission(e.target.value)}
-                placeholder="Brief mission statement"
-                rows={3}
-              />
-            </div>
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mission">Your Mission</Label>
+                  <Textarea
+                    id="mission"
+                    value={mission}
+                    onChange={(e) => setMission(e.target.value)}
+                    placeholder="Brief mission statement"
+                    rows={3}
+                  />
+                </div>
+              </div>
 
-          {/* Tone Selector */}
-          <div className="space-y-2">
-            <Label>Tone</Label>
-            <ToggleGroup
-              type="single"
-              value={tone}
-              onValueChange={(value) => value && setTone(value as Tone)}
-              className="flex flex-wrap justify-start gap-2"
-            >
-              <ToggleGroupItem value="professional" className="px-3 py-1.5 text-sm">
-                Professional
-              </ToggleGroupItem>
-              <ToggleGroupItem value="friendly" className="px-3 py-1.5 text-sm">
-                Friendly
-              </ToggleGroupItem>
-              <ToggleGroupItem value="enthusiastic" className="px-3 py-1.5 text-sm">
-                Enthusiastic
-              </ToggleGroupItem>
-              <ToggleGroupItem value="parentToParent" className="px-3 py-1.5 text-sm">
-                Parent-to-Parent
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
+              {/* Last Generated Date & Tone Selector */}
+              {generatedAt && allEmails && (
+                <div className="text-xs text-muted-foreground">
+                  Last generated: {formatGeneratedDate(generatedAt)}
+                </div>
+              )}
 
-          {/* Generate Button */}
-          <Button
-            onClick={handleGenerate}
-            disabled={isGenerating || !businessName || !specificAsk}
-            className="w-full bg-primary hover:bg-primary/90"
-          >
-            {isGenerating ? "Generating..." : "Generate Email"}
-          </Button>
-
-          {/* Loading Progress */}
-          {isGenerating && (
-            <div className="space-y-3">
-              <Progress value={progress} className="h-2" />
-              <p className="text-sm text-muted-foreground text-center animate-pulse">
-                {loadingMessage}
-              </p>
-            </div>
-          )}
-
-          {/* Email Output */}
-          {allEmails && currentEmail && (
-            <div className="space-y-4 pt-4 border-t">
+              {/* Tone Selector */}
               <div className="space-y-2">
-                <Label htmlFor="subject">Subject Line</Label>
-                <Input
-                  id="subject"
-                  value={currentEmail.subject}
-                  readOnly
-                  className="bg-muted"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="emailBody">Email Body</Label>
-                <Textarea
-                  id="emailBody"
-                  value={currentEmail.body}
-                  readOnly
-                  rows={10}
-                  className="resize-y bg-muted"
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleCopyEmail}
-                  className="flex-1"
+                <Label>Tone</Label>
+                <ToggleGroup
+                  type="single"
+                  value={tone}
+                  onValueChange={(value) => value && setTone(value as Tone)}
+                  className="flex flex-wrap justify-start gap-2"
                 >
-                  {copied ? (
-                    <>
-                      <Check className="mr-2 h-4 w-4" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="mr-2 h-4 w-4" />
-                      Copy Email
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={handleMarkContacted}
-                  className="flex-1"
-                >
-                  Mark as Contacted
-                </Button>
+                  <ToggleGroupItem value="professional" className="px-3 py-1.5 text-sm">
+                    Professional
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="friendly" className="px-3 py-1.5 text-sm">
+                    Friendly
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="enthusiastic" className="px-3 py-1.5 text-sm">
+                    Enthusiastic
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="parentToParent" className="px-3 py-1.5 text-sm">
+                    Parent-to-Parent
+                  </ToggleGroupItem>
+                </ToggleGroup>
               </div>
 
-              <Button
-                variant="link"
-                onClick={handleGenerate}
-                disabled={isGenerating}
-                className="w-full text-muted-foreground"
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? "animate-spin" : ""}`} />
-                Regenerate All Tones
-              </Button>
-            </div>
+              {/* Generate/Regenerate Button */}
+              {!allEmails && (
+                <Button
+                  onClick={handleGenerate}
+                  disabled={isGenerating || !businessName || !specificAsk}
+                  className="w-full bg-primary hover:bg-primary/90"
+                >
+                  {isGenerating ? "Generating..." : "Generate Email"}
+                </Button>
+              )}
+
+              {/* Loading Progress */}
+              {isGenerating && (
+                <div className="space-y-3">
+                  <Progress value={progress} className="h-2" />
+                  <p className="text-sm text-muted-foreground text-center animate-pulse">
+                    {loadingMessage}
+                  </p>
+                </div>
+              )}
+
+              {/* Email Output */}
+              {allEmails && currentEmail && (
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label htmlFor="subject">Subject Line</Label>
+                    <Input
+                      id="subject"
+                      value={currentEmail.subject}
+                      readOnly
+                      className="bg-muted"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="emailBody">Email Body</Label>
+                    <Textarea
+                      id="emailBody"
+                      value={currentEmail.body}
+                      readOnly
+                      rows={10}
+                      className="resize-y bg-muted"
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleCopyEmail}
+                      className="flex-1"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="mr-2 h-4 w-4" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copy Email
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={handleMarkContacted}
+                      className="flex-1"
+                    >
+                      Mark as Contacted
+                    </Button>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    onClick={handleGenerate}
+                    disabled={isGenerating || !businessName || !specificAsk}
+                    className="w-full"
+                  >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? "animate-spin" : ""}`} />
+                    Regenerate All Tones
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </SheetContent>
