@@ -89,9 +89,9 @@ export interface VolunteerFormData {
 
 // Status display labels
 export const STATUS_LABELS: Record<ItemStatus, string> = {
-  expected: 'Pledged',
+  expected: 'Expected',
   confirmed: 'Confirmed',
   received: 'Received',
   missing: 'Missing',
-  fulfilled: 'Handed Off'
+  fulfilled: 'Fulfilled'
 }

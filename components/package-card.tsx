@@ -25,11 +25,12 @@ interface PackageCardProps {
   items: Item[]
   volunteers: Volunteer[]
   onUpdate: () => void
+  onItemClick?: (item: Item) => void
 }
 
 const statusOptions: ItemStatus[] = ["expected", "confirmed", "received", "missing", "fulfilled"]
 
-export function PackageCard({ pkg, items, volunteers, onUpdate }: PackageCardProps) {
+export function PackageCard({ pkg, items, volunteers, onUpdate, onItemClick }: PackageCardProps) {
   const [isOpen, setIsOpen] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
@@ -128,7 +129,8 @@ export function PackageCard({ pkg, items, volunteers, onUpdate }: PackageCardPro
                   return (
                     <div
                       key={item.id}
-                      className={`flex items-center justify-between py-2 px-3 rounded-md bg-muted/50 ${
+                      onClick={() => onItemClick?.(item)}
+                      className={`flex items-center justify-between py-2 px-3 rounded-md bg-muted/50 cursor-pointer hover:bg-muted transition-colors ${
                         updatingId === item.id ? "opacity-50" : ""
                       }`}
                     >
@@ -154,7 +156,12 @@ export function PackageCard({ pkg, items, volunteers, onUpdate }: PackageCardPro
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                             <span className="sr-only">Item actions</span>
                           </Button>

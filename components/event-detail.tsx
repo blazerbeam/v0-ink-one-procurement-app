@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress"
 import { AddItemDialog } from "@/components/add-item-dialog"
 import { AddPackageDialog } from "@/components/add-package-dialog"
 import { AddVolunteerDialog } from "@/components/add-volunteer-dialog"
+import { EditItemSheet } from "@/components/edit-item-sheet"
 import { PackageCard } from "@/components/package-card"
 import { ItemStatusBadge } from "@/components/item-status-badge"
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -72,6 +73,7 @@ const statusOptions: ItemStatus[] = ["expected", "confirmed", "received", "missi
 export function EventDetail({ eventId }: EventDetailProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [editingItem, setEditingItem] = useState<Item | null>(null)
   
   const { data, isLoading, mutate } = useSWR(
     `event-${eventId}`,
@@ -172,7 +174,8 @@ export function EventDetail({ eventId }: EventDetailProps) {
     const ownerName = getVolunteerName(item.owner_id) || item.owner_name
     return (
       <div
-        className={`flex items-center justify-between py-2 px-3 rounded-md bg-muted/50 ${
+        onClick={() => setEditingItem(item)}
+        className={`flex items-center justify-between py-2 px-3 rounded-md bg-muted/50 cursor-pointer hover:bg-muted transition-colors ${
           updatingId === item.id ? "opacity-50" : ""
         }`}
       >
@@ -198,7 +201,12 @@ export function EventDetail({ eventId }: EventDetailProps) {
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 shrink-0"
+              onClick={(e) => e.stopPropagation()}
+            >
               <MoreHorizontal className="h-4 w-4" />
               <span className="sr-only">Item actions</span>
             </Button>
@@ -345,6 +353,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
                   items={pkgItems}
                   volunteers={volunteers}
                   onUpdate={() => mutate()}
+                  onItemClick={(item) => setEditingItem(item)}
                 />
               )
             })}
@@ -526,6 +535,16 @@ export function EventDetail({ eventId }: EventDetailProps) {
             </TabsContent>
           </Tabs>
         </div>
+
+        {/* Edit Item Sheet */}
+        <EditItemSheet
+          item={editingItem}
+          packages={packages}
+          volunteers={volunteers}
+          open={!!editingItem}
+          onOpenChange={(open) => !open && setEditingItem(null)}
+          onUpdate={() => mutate()}
+        />
       </main>
     </div>
   )
