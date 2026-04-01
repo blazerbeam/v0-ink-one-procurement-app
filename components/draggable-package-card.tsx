@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Droppable, Draggable } from "@hello-pangea/dnd"
-import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Trash2, UserCircle } from "lucide-react"
+import { ChevronDown, ChevronRight, GripVertical, Mail, MoreHorizontal, Trash2, UserCircle } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,6 +27,7 @@ interface DraggablePackageCardProps {
   volunteers: Volunteer[]
   onUpdate: () => void
   onItemClick?: (item: Item) => void
+  onOutreachClick?: (item: Item) => void
   isDragOver?: boolean
 }
 
@@ -38,6 +39,7 @@ export function DraggablePackageCard({
   volunteers, 
   onUpdate, 
   onItemClick,
+  onOutreachClick,
   isDragOver = false
 }: DraggablePackageCardProps) {
   const [isOpen, setIsOpen] = useState(true)
@@ -222,6 +224,13 @@ export function DraggablePackageCard({
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => onOutreachClick?.(item)}
+                                  >
+                                    <Mail className="mr-2 h-4 w-4" />
+                                    Generate Outreach Email
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
                                   {statusOptions.map((status) => (
                                     <DropdownMenuItem
                                       key={status}

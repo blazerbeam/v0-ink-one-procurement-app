@@ -14,6 +14,7 @@ import { AddItemDialog } from "@/components/add-item-dialog"
 import { AddPackageDialog } from "@/components/add-package-dialog"
 import { AddVolunteerDialog } from "@/components/add-volunteer-dialog"
 import { EditItemSheet } from "@/components/edit-item-sheet"
+import { OutreachEmailSheet } from "@/components/outreach-email-sheet"
 import { DraggablePackageCard } from "@/components/draggable-package-card"
 import { ItemStatusBadge } from "@/components/item-status-badge"
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -76,6 +77,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<Item | null>(null)
+  const [outreachItem, setOutreachItem] = useState<Item | null>(null)
   const [isMounted, setIsMounted] = useState(false)
 
   // Fix for @hello-pangea/dnd SSR hydration
@@ -262,6 +264,13 @@ export function EventDetail({ eventId }: EventDetailProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => setOutreachItem(item)}
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  Generate Outreach Email
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 {statusOptions.map((status) => (
                   <DropdownMenuItem
                     key={status}
@@ -426,6 +435,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
                     volunteers={volunteers}
                     onUpdate={() => mutate()}
                     onItemClick={(item) => setEditingItem(item)}
+                    onOutreachClick={(item) => setOutreachItem(item)}
                   />
                 )
               })}
@@ -658,6 +668,16 @@ export function EventDetail({ eventId }: EventDetailProps) {
           volunteers={volunteers}
           open={!!editingItem}
           onOpenChange={(open) => !open && setEditingItem(null)}
+          onUpdate={() => mutate()}
+        />
+
+        {/* Outreach Email Sheet */}
+        <OutreachEmailSheet
+          item={outreachItem}
+          event={event}
+          volunteers={volunteers}
+          open={!!outreachItem}
+          onOpenChange={(open) => !open && setOutreachItem(null)}
           onUpdate={() => mutate()}
         />
       </main>
