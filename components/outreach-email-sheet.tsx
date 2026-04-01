@@ -99,6 +99,13 @@ export function OutreachEmailSheet({
           business_name: businessName,
           specific_ask: specificAsk,
           sender_name: senderName,
+          // Organization profile for signature block
+          legal_name: event?.legal_name || "",
+          org_address: event?.org_address || "",
+          tax_id: event?.tax_id || "",
+          contact_email: event?.contact_email || "",
+          contact_phone: event?.contact_phone || "",
+          website: event?.website || "",
         }),
       })
       

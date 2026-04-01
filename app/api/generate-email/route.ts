@@ -6,8 +6,31 @@ export async function POST(req: Request) {
       event_name, 
       business_name, 
       specific_ask, 
-      sender_name
+      sender_name,
+      // Organization profile for signature block
+      legal_name,
+      org_address,
+      tax_id,
+      contact_email,
+      contact_phone,
+      website
     } = await req.json()
+
+    // Build signature block if we have profile info
+    let signatureInfo = ""
+    if (legal_name || org_address || tax_id || contact_email || contact_phone || website) {
+      signatureInfo = `
+
+Organization Profile for Signature Block:
+- Legal Name: ${legal_name || org_name}
+${org_address ? `- Address: ${org_address}` : ""}
+${tax_id ? `- Tax ID/EIN: ${tax_id}` : ""}
+${contact_email ? `- Email: ${contact_email}` : ""}
+${contact_phone ? `- Phone: ${contact_phone}` : ""}
+${website ? `- Website: ${website}` : ""}
+
+Include a professional signature block at the end of each email using this organization information.`
+    }
 
     const systemPrompt = `You are helping a nonprofit volunteer write donation request emails for their fundraising gala. Generate FOUR versions of the same outreach email, one for each tone style below.
 
@@ -31,7 +54,7 @@ Mission: ${mission || "Supporting our community"}
 Event: ${event_name}
 Donor/Business: ${business_name}
 Specific Ask: ${specific_ask}
-Sender Name: ${sender_name}
+Sender Name: ${sender_name}${signatureInfo}
 
 Remember to respond with ONLY the JSON object containing all four versions.`
 
