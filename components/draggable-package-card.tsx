@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Droppable, Draggable } from "@hello-pangea/dnd"
 import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Trash2, UserCircle } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
@@ -42,6 +42,11 @@ export function DraggablePackageCard({
 }: DraggablePackageCardProps) {
   const [isOpen, setIsOpen] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   const getVolunteerName = (ownerId: string | null) => {
     if (!ownerId) return null
@@ -73,6 +78,23 @@ export function DraggablePackageCard({
     await supabase.from("items").update({ package_id: null }).eq("package_id", pkg.id)
     await supabase.from("packages").delete().eq("id", pkg.id)
     onUpdate()
+  }
+
+  // Don't render Droppable until mounted (SSR fix)
+  if (!isMounted) {
+    return (
+      <Card>
+        <CardHeader className="py-3">
+          <div className="flex items-center gap-2">
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            <span className="font-semibold">{pkg.name}</span>
+            <span className="text-sm text-muted-foreground">
+              ({items.length} {items.length === 1 ? "item" : "items"})
+            </span>
+          </div>
+        </CardHeader>
+      </Card>
+    )
   }
 
   return (

@@ -46,7 +46,7 @@ import {
   UserCircle,
   Users,
 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 interface EventDetailProps {
   eventId: string
@@ -76,6 +76,12 @@ export function EventDetail({ eventId }: EventDetailProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<Item | null>(null)
+  const [isMounted, setIsMounted] = useState(false)
+
+  // Fix for @hello-pangea/dnd SSR hydration
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
   
   const { data, isLoading, mutate } = useSWR(
     `event-${eventId}`,
@@ -365,9 +371,28 @@ export function EventDetail({ eventId }: EventDetailProps) {
     </div>
   )
 
-  const ItemsTab = () => (
-    <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="grid gap-6 lg:grid-cols-[65%_35%]">
+  const ItemsTab = () => {
+    // Don't render DragDropContext until mounted (SSR fix)
+    if (!isMounted) {
+      return (
+        <div className="grid gap-6 lg:grid-cols-[65%_35%]">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Packages</h2>
+            </div>
+            <Skeleton className="h-[200px]" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-[200px]" />
+            <Skeleton className="h-[150px]" />
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <div className="grid gap-6 lg:grid-cols-[65%_35%]">
         {/* Left column - Packages */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -506,9 +531,10 @@ export function EventDetail({ eventId }: EventDetailProps) {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </DragDropContext>
-  )
+        </div>
+      </DragDropContext>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background">
