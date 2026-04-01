@@ -46,7 +46,16 @@ import {
   Trash2,
   UserCircle,
   Users,
+  X,
+  Check,
 } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useState, useEffect } from "react"
 
 interface EventDetailProps {
@@ -79,6 +88,12 @@ export function EventDetail({ eventId }: EventDetailProps) {
   const [editingItem, setEditingItem] = useState<Item | null>(null)
   const [outreachItem, setOutreachItem] = useState<Item | null>(null)
   const [isMounted, setIsMounted] = useState(false)
+  
+  // Filter state
+  type StatusFilter = "all" | "at-risk" | "unassigned" | "received" | "contacted"
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all")
+  const [statCardFilter, setStatCardFilter] = useState<"at-risk" | "progress" | null>(null)
 
   // Fix for @hello-pangea/dnd SSR hydration
   useEffect(() => {
@@ -103,7 +118,54 @@ export function EventDetail({ eventId }: EventDetailProps) {
 
   // Items by category
   const unassignedItems = items.filter((item) => !item.package_id)
-  const atRiskItems = items.filter((item) => item.status === "expected")
+  const atRiskItems = items.filter((item) => item.status === "expected" || item.status === "missing")
+
+  // Filter logic
+  const filterItem = (item: Item): boolean => {
+    // Stat card filter takes precedence
+    if (statCardFilter === "at-risk") {
+      if (item.status !== "expected" && item.status !== "missing") return false
+    } else if (statCardFilter === "progress") {
+      if (item.status !== "confirmed" && item.status !== "received") return false
+    }
+    
+    // Status filter
+    if (statusFilter === "at-risk" && item.status !== "expected" && item.status !== "missing") return false
+    if (statusFilter === "unassigned" && item.package_id) return false
+    if (statusFilter === "received" && item.status !== "received") return false
+    if (statusFilter === "contacted" && item.status !== "contacted") return false
+    
+    // Assignee filter
+    if (assigneeFilter !== "all") {
+      const ownerName = getVolunteerName(item.owner_id) || item.owner_name || ""
+      const volunteer = volunteers.find(v => v.id === assigneeFilter)
+      if (volunteer) {
+        const volName = `${volunteer.first_name} ${volunteer.last_name}`.toLowerCase()
+        if (ownerName.toLowerCase() !== volName) return false
+      }
+    }
+    
+    return true
+  }
+
+  const filteredItems = items.filter(filterItem)
+  const isFiltered = statusFilter !== "all" || assigneeFilter !== "all" || statCardFilter !== null
+
+  const clearAllFilters = () => {
+    setStatusFilter("all")
+    setAssigneeFilter("all")
+    setStatCardFilter(null)
+  }
+
+  const toggleStatCardFilter = (filter: "at-risk" | "progress") => {
+    if (statCardFilter === filter) {
+      setStatCardFilter(null)
+    } else {
+      setStatCardFilter(filter)
+      // Clear the status filter when using stat card filter
+      setStatusFilter("all")
+    }
+  }
 
   // Get volunteer name by id
   const getVolunteerName = (ownerId: string | null) => {
@@ -427,11 +489,16 @@ export function EventDetail({ eventId }: EventDetailProps) {
             <div className="space-y-3">
               {packages.map((pkg) => {
                 const pkgItems = items.filter((item) => item.package_id === pkg.id)
+                const filteredPkgItems = pkgItems.filter(filterItem)
+                
+                // Hide packages with no matching items when filtering
+                if (isFiltered && filteredPkgItems.length === 0) return null
+                
                 return (
                   <DraggablePackageCard
                     key={pkg.id}
                     pkg={pkg}
-                    items={pkgItems}
+                    items={filteredPkgItems}
                     volunteers={volunteers}
                     onUpdate={() => mutate()}
                     onItemClick={(item) => setEditingItem(item)}
@@ -469,17 +536,23 @@ export function EventDetail({ eventId }: EventDetailProps) {
                     {...provided.droppableProps}
                     className="min-h-[60px]"
                   >
-                    {unassignedItems.length === 0 && !snapshot.isDraggingOver ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No unassigned items
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {unassignedItems.map((item, index) => (
-                          <DraggableItemRow key={item.id} item={item} index={index} />
-                        ))}
-                      </div>
-                    )}
+                    {(() => {
+                      const filteredUnassigned = unassignedItems.filter(filterItem)
+                      if (filteredUnassigned.length === 0 && !snapshot.isDraggingOver) {
+                        return (
+                          <p className="text-sm text-muted-foreground text-center py-4">
+                            {isFiltered ? "No matching items" : "No unassigned items"}
+                          </p>
+                        )
+                      }
+                      return (
+                        <div className="space-y-2">
+                          {filteredUnassigned.map((item, index) => (
+                            <DraggableItemRow key={item.id} item={item} index={index} />
+                          ))}
+                        </div>
+                      )
+                    })()}
                     {provided.placeholder}
                   </div>
                 </CardContent>
@@ -499,45 +572,51 @@ export function EventDetail({ eventId }: EventDetailProps) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {atRiskItems.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No items at risk
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {atRiskItems.map((item) => {
-                    const ownerName = getVolunteerName(item.owner_id) || item.owner_name
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => setEditingItem(item)}
-                        className="flex items-center justify-between py-2 px-3 rounded-md bg-amber-100/50 dark:bg-amber-950/30 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium truncate">{item.name}</span>
-                            <ItemStatusBadge status={item.status} />
-                          </div>
-                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                            {item.donor_name && <span>{item.donor_name}</span>}
-                            {item.estimated_value && (
-                              <span className="font-medium text-foreground">
-                                ${item.estimated_value.toLocaleString()}
-                              </span>
-                            )}
-                            {ownerName && (
-                              <span className="flex items-center gap-1">
-                                <UserCircle className="h-3 w-3" />
-                                {ownerName}
-                              </span>
-                            )}
+              {(() => {
+                const filteredAtRisk = atRiskItems.filter(filterItem)
+                if (filteredAtRisk.length === 0) {
+                  return (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      {isFiltered ? "No matching items" : "No items at risk"}
+                    </p>
+                  )
+                }
+                return (
+                  <div className="space-y-2">
+                    {filteredAtRisk.map((item) => {
+                      const ownerName = getVolunteerName(item.owner_id) || item.owner_name
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setEditingItem(item)}
+                          className="flex items-center justify-between py-2 px-3 rounded-md bg-amber-100/50 dark:bg-amber-950/30 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium truncate">{item.name}</span>
+                              <ItemStatusBadge status={item.status} />
+                            </div>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                              {item.donor_name && <span>{item.donor_name}</span>}
+                              {item.estimated_value && (
+                                <span className="font-medium text-foreground">
+                                  ${item.estimated_value.toLocaleString()}
+                                </span>
+                              )}
+                              {ownerName && (
+                                <span className="flex items-center gap-1">
+                                  <UserCircle className="h-3 w-3" />
+                                  {ownerName}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </CardContent>
           </Card>
         </div>
@@ -582,11 +661,23 @@ export function EventDetail({ eventId }: EventDetailProps) {
 
           {/* Stats cards */}
           <div className="grid gap-4 md:grid-cols-4">
-            <Card>
+            <Card 
+              className={`cursor-pointer transition-all hover:bg-muted/50 ${
+                statCardFilter === "progress" ? "ring-2 ring-green-500 border-green-500" : ""
+              }`}
+              onClick={() => toggleStatCardFilter("progress")}
+            >
               <CardHeader className="pb-2">
-                <CardDescription className="flex items-center gap-2">
-                  <PackageIcon className="h-4 w-4" />
-                  Items Progress
+                <CardDescription className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <PackageIcon className="h-4 w-4" />
+                    Items Progress
+                  </span>
+                  {statCardFilter === "progress" && (
+                    <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                      <X className="h-3 w-3" /> Clear
+                    </span>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -612,6 +703,34 @@ export function EventDetail({ eventId }: EventDetailProps) {
                 </p>
               </CardContent>
             </Card>
+            <Card 
+              className={`cursor-pointer transition-all hover:bg-muted/50 ${
+                statCardFilter === "at-risk" ? "ring-2 ring-green-500 border-green-500" : ""
+              }`}
+              onClick={() => toggleStatCardFilter("at-risk")}
+            >
+              <CardHeader className="pb-2">
+                <CardDescription className="flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-amber-600">
+                    <AlertTriangle className="h-4 w-4" />
+                    At Risk
+                  </span>
+                  {statCardFilter === "at-risk" && (
+                    <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                      <X className="h-3 w-3" /> Clear
+                    </span>
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-amber-600">
+                  {atRiskItems.length}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  items need follow-up
+                </p>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription className="flex items-center gap-2">
@@ -623,19 +742,6 @@ export function EventDetail({ eventId }: EventDetailProps) {
                 <div className="text-lg font-semibold">
                   {formatDate(event.event_date) || "Not set"}
                 </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Expected Guests
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {event.guest_count?.toLocaleString() || "—"}
-                </div>
                 {event.location && (
                   <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                     <MapPin className="h-3 w-3" />
@@ -645,6 +751,79 @@ export function EventDetail({ eventId }: EventDetailProps) {
               </CardContent>
             </Card>
           </div>
+
+          {/* Filter Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-3 px-4 bg-muted/30 rounded-lg border">
+            {/* Status filter pills */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-muted-foreground mr-1">Status:</span>
+              {(["all", "at-risk", "unassigned", "received", "contacted"] as const).map((filter) => (
+                <Button
+                  key={filter}
+                  variant={statusFilter === filter && !statCardFilter ? "default" : "outline"}
+                  size="sm"
+                  className={`h-7 text-xs ${statusFilter === filter && !statCardFilter ? "bg-primary" : ""}`}
+                  onClick={() => {
+                    setStatusFilter(filter)
+                    setStatCardFilter(null)
+                  }}
+                >
+                  {filter === "all" && "All"}
+                  {filter === "at-risk" && "At Risk"}
+                  {filter === "unassigned" && "Unassigned"}
+                  {filter === "received" && "Received"}
+                  {filter === "contacted" && "Contacted"}
+                </Button>
+              ))}
+            </div>
+
+            {/* Assignee dropdown */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Assignee:</span>
+              <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+                <SelectTrigger className="w-[180px] h-8">
+                  <SelectValue placeholder="All Assignees" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Assignees</SelectItem>
+                  {volunteers.map((volunteer) => (
+                    <SelectItem key={volunteer.id} value={volunteer.id}>
+                      {volunteer.first_name} {volunteer.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Active filter indicator */}
+          {isFiltered && (
+            <div className="flex items-center justify-between py-2 px-4 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
+              <div className="flex items-center gap-2 text-sm">
+                <Check className="h-4 w-4 text-green-600" />
+                <span className="text-green-700 dark:text-green-400">
+                  Filtered: 
+                  {statCardFilter === "at-risk" && " At Risk"}
+                  {statCardFilter === "progress" && " In Progress"}
+                  {statusFilter !== "all" && !statCardFilter && ` ${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1).replace("-", " ")}`}
+                  {assigneeFilter !== "all" && (() => {
+                    const vol = volunteers.find(v => v.id === assigneeFilter)
+                    return vol ? ` · ${vol.first_name} ${vol.last_name}` : ""
+                  })()}
+                  {" · "}Showing {filteredItems.length} of {items.length} items
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-green-700 hover:text-green-800 hover:bg-green-100"
+                onClick={clearAllFilters}
+              >
+                <X className="h-3 w-3 mr-1" />
+                Clear all filters
+              </Button>
+            </div>
+          )}
 
           {/* Tabs */}
           <Tabs defaultValue="items" className="space-y-4">
