@@ -71,7 +71,7 @@ async function fetchEventData(eventId: string) {
   }
 }
 
-const statusOptions: ItemStatus[] = ["expected", "confirmed", "received", "missing", "fulfilled"]
+const statusOptions: ItemStatus[] = ["expected", "contacted", "confirmed", "received", "missing", "fulfilled"]
 
 export function EventDetail({ eventId }: EventDetailProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)

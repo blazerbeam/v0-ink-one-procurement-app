@@ -35,7 +35,7 @@ interface AddItemDialogProps {
   onVolunteerAdded: () => void
 }
 
-const statusOptions: ItemStatus[] = ["expected", "confirmed", "received", "missing", "fulfilled"]
+const statusOptions: ItemStatus[] = ["expected", "contacted", "confirmed", "received", "missing", "fulfilled"]
 
 export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVolunteerAdded }: AddItemDialogProps) {
   const [open, setOpen] = useState(false)
@@ -43,7 +43,8 @@ export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVo
   const [formData, setFormData] = useState<ItemFormData>({
     name: "",
     description: "",
-    donor_name: "",
+    business_name: "",
+    contact_name: "",
     estimated_value: "",
     status: "expected",
     owner_id: "",
@@ -69,7 +70,9 @@ export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVo
       event_id: eventId,
       name: formData.name.trim(),
       description: formData.description.trim() || null,
-      donor_name: formData.donor_name.trim() || null,
+      business_name: formData.business_name.trim() || null,
+      contact_name: formData.contact_name.trim() || null,
+      donor_name: formData.business_name.trim() || null, // backwards compat
       estimated_value: formData.estimated_value ? Number(formData.estimated_value) : null,
       status: formData.status,
       owner_id: ownerId,
@@ -83,7 +86,8 @@ export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVo
       setFormData({
         name: "",
         description: "",
-        donor_name: "",
+        business_name: "",
+        contact_name: "",
         estimated_value: "",
         status: "expected",
         owner_id: "",
@@ -133,27 +137,36 @@ export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVo
             </Field>
             <div className="grid grid-cols-2 gap-4">
               <Field>
-                <FieldLabel htmlFor="donor_name">Donor Name</FieldLabel>
+                <FieldLabel htmlFor="business_name">Business Name</FieldLabel>
                 <Input
-                  id="donor_name"
-                  value={formData.donor_name}
-                  onChange={(e) => setFormData({ ...formData, donor_name: e.target.value })}
+                  id="business_name"
+                  value={formData.business_name}
+                  onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
                   placeholder="e.g., Local Hotel"
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="estimated_value">Estimated Value ($)</FieldLabel>
+                <FieldLabel htmlFor="contact_name">Contact Name</FieldLabel>
                 <Input
-                  id="estimated_value"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={formData.estimated_value}
-                  onChange={(e) => setFormData({ ...formData, estimated_value: e.target.value })}
-                  placeholder="0.00"
+                  id="contact_name"
+                  value={formData.contact_name}
+                  onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
+                  placeholder="e.g., John Smith"
                 />
               </Field>
             </div>
+            <Field>
+              <FieldLabel htmlFor="estimated_value">Estimated Value ($)</FieldLabel>
+              <Input
+                id="estimated_value"
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.estimated_value}
+                onChange={(e) => setFormData({ ...formData, estimated_value: e.target.value })}
+                placeholder="0.00"
+              />
+            </Field>
             <div className="grid grid-cols-2 gap-4">
               <Field>
                 <FieldLabel htmlFor="status">Status</FieldLabel>

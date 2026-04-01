@@ -45,7 +45,7 @@ interface EditItemSheetProps {
   onUpdate: () => void
 }
 
-const statusOptions: ItemStatus[] = ["expected", "confirmed", "received", "missing", "fulfilled"]
+const statusOptions: ItemStatus[] = ["expected", "contacted", "confirmed", "received", "missing", "fulfilled"]
 
 export function EditItemSheet({
   item,
@@ -59,7 +59,8 @@ export function EditItemSheet({
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    donor_name: "",
+    business_name: "",
+    contact_name: "",
     estimated_value: "",
     status: "expected" as ItemStatus,
     owner_id: "none",
@@ -72,7 +73,8 @@ export function EditItemSheet({
       setFormData({
         name: item.name || "",
         description: item.description || "",
-        donor_name: item.donor_name || "",
+        business_name: item.business_name || item.donor_name || "",
+        contact_name: item.contact_name || "",
         estimated_value: item.estimated_value?.toString() || "",
         status: item.status,
         owner_id: item.owner_id || "none",
@@ -101,7 +103,9 @@ export function EditItemSheet({
       .update({
         name: formData.name.trim(),
         description: formData.description.trim() || null,
-        donor_name: formData.donor_name.trim() || null,
+        business_name: formData.business_name.trim() || null,
+        contact_name: formData.contact_name.trim() || null,
+        donor_name: formData.business_name.trim() || null, // backwards compat
         estimated_value: formData.estimated_value ? Number(formData.estimated_value) : null,
         status: formData.status,
         owner_id: ownerId,
@@ -160,14 +164,25 @@ export function EditItemSheet({
               />
             </Field>
 
-            <Field>
-              <FieldLabel htmlFor="donor_name">Donor Name</FieldLabel>
-              <Input
-                id="donor_name"
-                value={formData.donor_name}
-                onChange={(e) => setFormData({ ...formData, donor_name: e.target.value })}
-              />
-            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel htmlFor="business_name">Business Name</FieldLabel>
+                <Input
+                  id="business_name"
+                  value={formData.business_name}
+                  onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="contact_name">Contact Name</FieldLabel>
+                <Input
+                  id="contact_name"
+                  value={formData.contact_name}
+                  onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
+                />
+              </Field>
+            </div>
 
             <Field>
               <FieldLabel htmlFor="estimated_value">Estimated Value ($)</FieldLabel>

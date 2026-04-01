@@ -42,7 +42,7 @@ export interface EventFormData {
   website: string
 }
 
-export type ItemStatus = 'expected' | 'confirmed' | 'received' | 'missing' | 'fulfilled'
+export type ItemStatus = 'expected' | 'contacted' | 'confirmed' | 'received' | 'missing' | 'fulfilled'
 
 export interface Package {
   id: string
@@ -60,7 +60,9 @@ export interface Item {
   package_id: string | null
   name: string
   description: string | null
-  donor_name: string | null
+  donor_name: string | null // deprecated, use business_name
+  business_name: string | null
+  contact_name: string | null
   estimated_value: number | null
   status: ItemStatus
   owner_name: string | null
@@ -73,7 +75,8 @@ export interface Item {
 export interface ItemFormData {
   name: string
   description: string
-  donor_name: string
+  business_name: string
+  contact_name: string
   estimated_value: number | string
   status: ItemStatus
   owner_id: string
@@ -108,6 +111,7 @@ export interface VolunteerFormData {
 // Status display labels
 export const STATUS_LABELS: Record<ItemStatus, string> = {
   expected: 'Expected',
+  contacted: 'Contacted',
   confirmed: 'Confirmed',
   received: 'Received',
   missing: 'Missing',

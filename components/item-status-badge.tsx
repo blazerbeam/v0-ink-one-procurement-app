@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 
 const statusStyles: Record<ItemStatus, string> = {
   expected: "bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-100",
+  contacted: "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100",
   confirmed: "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100",
   received: "bg-green-100 text-green-700 border-green-200 hover:bg-green-100",
   missing: "bg-red-100 text-red-700 border-red-200 hover:bg-red-100",
