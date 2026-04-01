@@ -223,7 +223,7 @@ export function DraggablePackageCard({
                                     <span className="sr-only">Item actions</span>
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
+                                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                                   <DropdownMenuItem
                                     onClick={() => onOutreachClick?.(item)}
                                   >

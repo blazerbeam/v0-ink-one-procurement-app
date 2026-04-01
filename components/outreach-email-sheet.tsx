@@ -5,6 +5,7 @@ import { Copy, Mail, RefreshCw, X, Check } from "lucide-react"
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
@@ -130,20 +131,14 @@ export function OutreachEmailSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[480px] sm:max-w-[480px] overflow-y-auto">
         <SheetHeader className="pb-4 border-b">
-          <div className="flex items-center justify-between">
-            <div>
-              <SheetTitle className="flex items-center gap-2">
-                <Mail className="h-5 w-5" />
-                Outreach Email
-              </SheetTitle>
-              {item && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  {item.name}
-                  {item.donor_name && ` - ${item.donor_name}`}
-                </p>
-              )}
-            </div>
-          </div>
+          <SheetTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5" />
+            Outreach Email
+          </SheetTitle>
+          <SheetDescription>
+            {item?.name}
+            {item?.donor_name && ` - ${item.donor_name}`}
+          </SheetDescription>
         </SheetHeader>
 
         <div className="space-y-6 py-6">

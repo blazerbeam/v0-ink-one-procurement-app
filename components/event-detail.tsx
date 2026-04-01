@@ -263,7 +263,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
                   <span className="sr-only">Item actions</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenuItem
                   onClick={() => setOutreachItem(item)}
                 >
