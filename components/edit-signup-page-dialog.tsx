@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useCallback, useRef } from "react"
 import { Pencil } from "lucide-react"
 import {
   Dialog,
@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -37,7 +36,7 @@ export function EditSignupPageDialog({
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   
   const [formData, setFormData] = useState({
     title: signupPage.title,
@@ -45,20 +44,19 @@ export function EditSignupPageDialog({
     allow_open_donations: signupPage.allow_open_donations,
   })
 
+  // Track if we've loaded the items to prevent re-loading
+  const hasLoadedRef = useRef(false)
+
   // Filter to only show items with "needed" status
   const availableItems = items.filter(item => item.status === "needed")
 
-  // Load existing selected items when dialog opens
-  useEffect(() => {
-    if (open) {
-      loadSelectedItems()
-    }
-  }, [open])
-
-  const loadSelectedItems = async () => {
-    setIsLoading(true)
-    const supabase = createClient()
+  const loadSelectedItems = useCallback(async () => {
+    if (hasLoadedRef.current) return
     
+    setIsLoading(true)
+    hasLoadedRef.current = true
+    
+    const supabase = createClient()
     const { data } = await supabase
       .from("signup_page_items")
       .select("item_id")
@@ -68,23 +66,24 @@ export function EditSignupPageDialog({
       setSelectedItemIds(data.map(row => row.item_id))
     }
     setIsLoading(false)
-  }
+  }, [signupPage.id])
 
-  const handleSelectAll = () => {
-    setSelectedItemIds(availableItems.map(item => item.id))
-  }
+  const handleSelectAll = useCallback(() => {
+    const neededIds = items.filter(item => item.status === "needed").map(item => item.id)
+    setSelectedItemIds(neededIds)
+  }, [items])
 
-  const handleDeselectAll = () => {
+  const handleDeselectAll = useCallback(() => {
     setSelectedItemIds([])
-  }
+  }, [])
 
-  const toggleItem = (itemId: string) => {
+  const toggleItem = useCallback((itemId: string) => {
     setSelectedItemIds(prev => 
       prev.includes(itemId)
         ? prev.filter(id => id !== itemId)
         : [...prev, itemId]
     )
-  }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -93,7 +92,6 @@ export function EditSignupPageDialog({
     setIsSubmitting(true)
     const supabase = createClient()
 
-    // Update the signup page
     const { error } = await supabase
       .from("signup_pages")
       .update({
@@ -105,7 +103,6 @@ export function EditSignupPageDialog({
       .eq("id", signupPage.id)
 
     if (!error) {
-      // Delete existing items and insert new selection
       await supabase
         .from("signup_page_items")
         .delete()
@@ -126,18 +123,26 @@ export function EditSignupPageDialog({
     setIsSubmitting(false)
   }
 
-  const handleClose = () => {
-    setOpen(false)
-    // Reset form to original values
-    setFormData({
-      title: signupPage.title,
-      message: signupPage.message || "",
-      allow_open_donations: signupPage.allow_open_donations,
-    })
-  }
+  const handleOpenChange = useCallback((isOpen: boolean) => {
+    if (isOpen) {
+      // Reset form to current signup page values
+      setFormData({
+        title: signupPage.title,
+        message: signupPage.message || "",
+        allow_open_donations: signupPage.allow_open_donations,
+      })
+      hasLoadedRef.current = false
+      setOpen(true)
+      // Load items after setting open
+      loadSelectedItems()
+    } else {
+      setOpen(false)
+      hasLoadedRef.current = false
+    }
+  }, [signupPage, loadSelectedItems])
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => isOpen ? setOpen(true) : handleClose()}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="ghost" size="sm">
@@ -161,7 +166,7 @@ export function EditSignupPageDialog({
                 <Input
                   id="edit-title"
                   value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                   placeholder="e.g., Spring Gala Donation Sign-Up"
                   required
                 />
@@ -183,7 +188,7 @@ export function EditSignupPageDialog({
                 <Textarea
                   id="edit-message"
                   value={formData.message}
-                  onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
                   placeholder="Thank you for supporting our fundraiser! Please browse available items below and sign up to donate."
                   rows={3}
                 />
@@ -196,16 +201,15 @@ export function EditSignupPageDialog({
                     Let donors suggest their own items in addition to selecting from your list
                   </p>
                 </div>
-                <Switch
+                <Checkbox
                   id="edit-allow-open"
                   checked={formData.allow_open_donations}
                   onCheckedChange={(checked) => 
-                    setFormData({ ...formData, allow_open_donations: checked })
+                    setFormData(prev => ({ ...prev, allow_open_donations: checked === true }))
                   }
                 />
               </div>
 
-              {/* Item Selection */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Select Items to Include</Label>
@@ -270,7 +274,7 @@ export function EditSignupPageDialog({
             </div>
           </div>
           <DialogFooter className="mt-4">
-            <Button type="button" variant="outline" onClick={handleClose}>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting || !formData.title.trim()}>
