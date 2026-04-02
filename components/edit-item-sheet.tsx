@@ -67,9 +67,9 @@ export function EditItemSheet({
     package_id: "none",
   })
 
-  // Update form data when item changes
+  // Update form data when item changes - only when sheet is open
   useEffect(() => {
-    if (item) {
+    if (open && item) {
       // Try to match owner_id first, otherwise try to find volunteer by owner_name text
       let ownerId = item.owner_id || "none"
       if (ownerId === "none" && item.owner_name) {
@@ -97,7 +97,7 @@ export function EditItemSheet({
         package_id: item.package_id || "none",
       })
     }
-  }, [item, volunteers])
+  }, [open, item, volunteers])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
