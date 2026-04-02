@@ -475,9 +475,9 @@ export function EventDetail({ eventId }: EventDetailProps) {
 
     return (
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="grid gap-6 lg:grid-cols-[65%_35%]">
-        {/* Left column - Packages */}
-        <div className="space-y-4">
+        <div className="flex flex-col-reverse gap-6 lg:flex-row lg:gap-6">
+        {/* Packages column - shown second on mobile (flex-col-reverse) */}
+        <div className="space-y-4 lg:flex-[65%]">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Packages</h2>
             <AddPackageDialog eventId={eventId} onPackageAdded={() => mutate()} />
@@ -492,7 +492,12 @@ export function EventDetail({ eventId }: EventDetailProps) {
                   </EmptyMedia>
                   <EmptyTitle>Showing unassigned items only</EmptyTitle>
                   <EmptyDescription>
-                    All {unassignedItems.length} unassigned item{unassignedItems.length !== 1 ? 's are' : ' is'} in the right column.
+                    <span className="lg:hidden">
+                      All {unassignedItems.length} unassigned item{unassignedItems.length !== 1 ? 's are' : ' is'} shown above.
+                    </span>
+                    <span className="hidden lg:inline">
+                      All {unassignedItems.length} unassigned item{unassignedItems.length !== 1 ? 's are' : ' is'} in the right column.
+                    </span>
                     <br />
                     <Button 
                       variant="link" 
@@ -525,18 +530,35 @@ export function EventDetail({ eventId }: EventDetailProps) {
                 const pkgItems = items.filter((item) => item.package_id === pkg.id)
                 const filteredPkgItems = pkgItems.filter(filterItem)
                 
-                // Hide packages with no matching items when filtering
-                if (isFiltered && filteredPkgItems.length === 0) return null
+                // Build filter label for context
+                let filterLabel: string | undefined
+                const isDimmed = isFiltered && filteredPkgItems.length === 0
+                
+                if (isFiltered && pkgItems.length > 0) {
+                  if (statCardFilter === "at-risk" || statusFilter === "at-risk") {
+                    const atRiskCount = pkgItems.filter(i => i.status === "expected" || i.status === "missing").length
+                    if (atRiskCount > 0) {
+                      filterLabel = `${atRiskCount} of ${pkgItems.length} at risk`
+                    }
+                  } else if (assigneeFilter !== "all") {
+                    if (filteredPkgItems.length > 0) {
+                      filterLabel = `${filteredPkgItems.length} of ${pkgItems.length} items`
+                    }
+                  }
+                }
                 
                 return (
                   <DraggablePackageCard
                     key={pkg.id}
                     pkg={pkg}
                     items={filteredPkgItems}
+                    allItems={pkgItems}
                     volunteers={volunteers}
                     onUpdate={() => mutate()}
                     onItemClick={(item) => setEditingItem(item)}
                     onOutreachClick={(item) => setOutreachItem(item)}
+                    isDimmed={isDimmed}
+                    filterLabel={filterLabel}
                   />
                 )
               })}
@@ -544,8 +566,8 @@ export function EventDetail({ eventId }: EventDetailProps) {
           )}
         </div>
 
-        {/* Right column - Unassigned Items & At Risk */}
-        <div className="space-y-4">
+        {/* Unassigned column - shown first on mobile */}
+        <div className="space-y-4 lg:flex-[35%]">
           {/* Unassigned Items */}
           <Droppable droppableId="unassigned" type="ITEM">
             {(provided, snapshot) => (
@@ -693,10 +715,10 @@ export function EventDetail({ eventId }: EventDetailProps) {
             </div>
           </div>
 
-          {/* Stats cards */}
-          <div className="grid gap-4 md:grid-cols-4">
+          {/* Stats cards - horizontal scroll on mobile */}
+          <div className="flex gap-4 overflow-x-auto pb-2 md:pb-0 md:grid md:grid-cols-4 md:overflow-visible snap-x snap-mandatory -mx-4 px-4 md:mx-0 md:px-0">
             <Card 
-              className={`cursor-pointer transition-all hover:bg-muted/50 ${
+              className={`min-w-[180px] md:min-w-0 snap-start cursor-pointer transition-all hover:bg-muted/50 ${
                 statCardFilter === "progress" ? "ring-2 ring-green-500 border-green-500" : ""
               }`}
               onClick={() => toggleStatCardFilter("progress")}
@@ -721,7 +743,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
                 <Progress value={progress} className="mt-2 h-2" />
               </CardContent>
             </Card>
-            <Card>
+            <Card className="min-w-[180px] md:min-w-0 snap-start">
               <CardHeader className="pb-2">
                 <CardDescription className="flex items-center gap-2">
                   <DollarSign className="h-4 w-4" />
@@ -738,7 +760,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
               </CardContent>
             </Card>
             <Card 
-              className={`cursor-pointer transition-all hover:bg-muted/50 ${
+              className={`min-w-[180px] md:min-w-0 snap-start cursor-pointer transition-all hover:bg-muted/50 ${
                 statCardFilter === "at-risk" ? "ring-2 ring-green-500 border-green-500" : ""
               }`}
               onClick={() => toggleStatCardFilter("at-risk")}
@@ -765,7 +787,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
                 </p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="min-w-[180px] md:min-w-0 snap-start">
               <CardHeader className="pb-2">
                 <CardDescription className="flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
