@@ -713,7 +713,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
           {/* Back link and title */}
           <div>
             <Button variant="ghost" size="sm" asChild className="mb-2 -ml-2">
-              <Link href="/">
+              <Link href="/app">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Events
               </Link>
