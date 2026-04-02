@@ -42,12 +42,12 @@ export function CreateSignupPageDialog({
   // Use ref to track initialization
   const initializedRef = useRef(false)
 
-  // Filter to only show items with "needed" status
-  const availableItems = items.filter(item => item.status === "needed")
+  // Filter to only show items with "needed" status - guard against undefined/null
+  const availableItems = (items || []).filter(item => item.status === "needed")
 
   // Initialize selection when modal opens
   useEffect(() => {
-    if (open && !initializedRef.current && !createdSlug) {
+    if (open && !initializedRef.current && !createdSlug && items && items.length > 0) {
       initializedRef.current = true
       const neededIds = items.filter(item => item.status === "needed").map(item => item.id)
       setSelectedItemIds(neededIds)
@@ -73,7 +73,7 @@ export function CreateSignupPageDialog({
   }
 
   const handleSelectAll = () => {
-    const neededIds = items.filter(item => item.status === "needed").map(item => item.id)
+    const neededIds = (items || []).filter(item => item.status === "needed").map(item => item.id)
     setSelectedItemIds(neededIds)
   }
 
@@ -173,7 +173,7 @@ export function CreateSignupPageDialog({
         />
         
         {/* Modal panel */}
-        <div className="relative z-50 bg-background rounded-lg shadow-xl w-full max-w-[600px] mx-4 max-h-[90vh] flex flex-col">
+        <div className="relative z-50 bg-background rounded-lg shadow-xl w-full max-w-2xl min-w-[600px] mx-4 max-h-[85vh] flex flex-col">
           {createdSlug ? (
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">

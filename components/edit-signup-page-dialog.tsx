@@ -39,8 +39,8 @@ export function EditSignupPageDialog({
   // Use ref to track if items have been loaded
   const hasLoadedRef = useRef(false)
 
-  // Filter to only show items with "needed" status
-  const availableItems = items.filter(item => item.status === "needed")
+  // Filter to only show items with "needed" status - guard against undefined/null
+  const availableItems = (items || []).filter(item => item.status === "needed")
 
   // Load selected items when modal opens
   useEffect(() => {
@@ -66,7 +66,7 @@ export function EditSignupPageDialog({
   }
 
   const handleSelectAll = () => {
-    const neededIds = items.filter(item => item.status === "needed").map(item => item.id)
+    const neededIds = (items || []).filter(item => item.status === "needed").map(item => item.id)
     setSelectedItemIds(neededIds)
   }
 
@@ -168,7 +168,7 @@ export function EditSignupPageDialog({
         />
         
         {/* Modal panel */}
-        <div className="relative z-50 bg-background rounded-lg shadow-xl w-full max-w-[600px] mx-4 max-h-[90vh] flex flex-col">
+        <div className="relative z-50 bg-background rounded-lg shadow-xl w-full max-w-2xl min-w-[600px] mx-4 max-h-[85vh] flex flex-col">
           <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
             <div className="p-6 pb-0">
               <div className="flex items-center justify-between mb-4">
