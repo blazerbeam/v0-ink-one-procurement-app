@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Droppable, Draggable } from "@hello-pangea/dnd"
-import { ChevronDown, ChevronRight, GripVertical, Mail, MoreHorizontal, Trash2, UserCircle } from "lucide-react"
+import { ChevronDown, ChevronRight, GripVertical, Mail, MoreHorizontal, Plus, Trash2, UserCircle } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,13 +20,17 @@ import {
 import { ItemStatusBadge } from "@/components/item-status-badge"
 import { Item, ItemStatus, Package, Volunteer, STATUS_LABELS } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
+import { AddItemDialog } from "./add-item-dialog"
 
 interface DraggablePackageCardProps {
   pkg: Package
   items: Item[]
   allItems?: Item[] // All items in package before filtering
   volunteers: Volunteer[]
+  packages: Package[] // All packages for the AddItemDialog
+  eventId: string
   onUpdate: () => void
+  onVolunteerAdded: () => void
   onItemClick?: (item: Item) => void
   onOutreachClick?: (item: Item) => void
   isDragOver?: boolean
@@ -40,8 +44,11 @@ export function DraggablePackageCard({
   pkg, 
   items, 
   allItems,
-  volunteers, 
-  onUpdate, 
+  volunteers,
+  packages,
+  eventId,
+  onUpdate,
+  onVolunteerAdded,
   onItemClick,
   onOutreachClick,
   isDragOver = false,
@@ -145,6 +152,20 @@ export function DraggablePackageCard({
                   <span className="text-sm font-medium">
                     ${totalValue.toLocaleString()}
                   </span>
+                  <AddItemDialog
+                    eventId={eventId}
+                    packages={packages}
+                    volunteers={volunteers}
+                    onItemAdded={onUpdate}
+                    onVolunteerAdded={onVolunteerAdded}
+                    defaultPackageId={pkg.id}
+                    trigger={
+                      <Button variant="ghost" size="sm" className="h-8 px-2">
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Item
+                      </Button>
+                    }
+                  />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8">

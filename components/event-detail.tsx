@@ -554,7 +554,10 @@ export function EventDetail({ eventId }: EventDetailProps) {
                     items={filteredPkgItems}
                     allItems={pkgItems}
                     volunteers={volunteers}
+                    packages={packages}
+                    eventId={eventId}
                     onUpdate={() => mutate()}
+                    onVolunteerAdded={() => mutate()}
                     onItemClick={(item) => setEditingItem(item)}
                     onOutreachClick={(item) => setOutreachItem(item)}
                     isDimmed={isDimmed}
