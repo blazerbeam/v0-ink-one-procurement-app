@@ -17,6 +17,7 @@ import { EditItemSheet } from "@/components/edit-item-sheet"
 import { OutreachEmailSheet } from "@/components/outreach-email-sheet"
 import { DraggablePackageCard } from "@/components/draggable-package-card"
 import { ItemStatusBadge } from "@/components/item-status-badge"
+import { CommunityDonationsTab } from "@/components/community-donations-tab"
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -886,15 +887,19 @@ export function EventDetail({ eventId }: EventDetailProps) {
 
           {/* Tabs */}
           <Tabs defaultValue="items" className="space-y-4">
-            <TabsList>
+<TabsList>
               <TabsTrigger value="items">Items & Packages</TabsTrigger>
               <TabsTrigger value="volunteers">Volunteers ({volunteers.length})</TabsTrigger>
+              <TabsTrigger value="community">Community</TabsTrigger>
             </TabsList>
             <TabsContent value="items">
               <ItemsTab />
             </TabsContent>
             <TabsContent value="volunteers">
               <VolunteersTab />
+            </TabsContent>
+            <TabsContent value="community">
+              <CommunityDonationsTab eventId={eventId} eventName={event.event_name} />
             </TabsContent>
           </Tabs>
         </div>

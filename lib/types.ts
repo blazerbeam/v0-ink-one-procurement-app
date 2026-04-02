@@ -108,6 +108,40 @@ export interface VolunteerFormData {
   notes: string
 }
 
+// Signup pages for community donations
+export interface SignupPage {
+  id: string
+  event_id: string
+  slug: string
+  title: string
+  message: string | null
+  allow_open_donations: boolean
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface SignupSubmission {
+  id: string
+  signup_page_id: string
+  donor_name: string
+  donor_email: string | null
+  donor_phone: string | null
+  custom_item_description: string | null
+  status: 'pending' | 'confirmed' | 'declined'
+  created_at: string
+  updated_at: string
+  // Joined data
+  items?: Item[]
+}
+
+export interface SignupSubmissionItem {
+  id: string
+  submission_id: string
+  item_id: string
+  created_at: string
+}
+
 // Status display labels
 export const STATUS_LABELS: Record<ItemStatus, string> = {
   expected: 'Expected',
