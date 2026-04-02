@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useRef } from "react"
 import { Pencil } from "lucide-react"
 import {
   Dialog,
@@ -44,13 +44,15 @@ export function EditSignupPageDialog({
     allow_open_donations: signupPage.allow_open_donations,
   })
 
-  // Track if we've loaded the items to prevent re-loading
+  // Use refs to avoid stale closures and dependency issues
   const hasLoadedRef = useRef(false)
+  const signupPageRef = useRef(signupPage)
+  signupPageRef.current = signupPage
 
   // Filter to only show items with "needed" status
   const availableItems = items.filter(item => item.status === "needed")
 
-  const loadSelectedItems = useCallback(async () => {
+  const loadSelectedItems = async () => {
     if (hasLoadedRef.current) return
     
     setIsLoading(true)
@@ -60,30 +62,30 @@ export function EditSignupPageDialog({
     const { data } = await supabase
       .from("signup_page_items")
       .select("item_id")
-      .eq("signup_page_id", signupPage.id)
+      .eq("signup_page_id", signupPageRef.current.id)
 
     if (data) {
       setSelectedItemIds(data.map(row => row.item_id))
     }
     setIsLoading(false)
-  }, [signupPage.id])
+  }
 
-  const handleSelectAll = useCallback(() => {
+  const handleSelectAll = () => {
     const neededIds = items.filter(item => item.status === "needed").map(item => item.id)
     setSelectedItemIds(neededIds)
-  }, [items])
+  }
 
-  const handleDeselectAll = useCallback(() => {
+  const handleDeselectAll = () => {
     setSelectedItemIds([])
-  }, [])
+  }
 
-  const toggleItem = useCallback((itemId: string) => {
+  const toggleItem = (itemId: string) => {
     setSelectedItemIds(prev => 
       prev.includes(itemId)
         ? prev.filter(id => id !== itemId)
         : [...prev, itemId]
     )
-  }, [])
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -123,23 +125,29 @@ export function EditSignupPageDialog({
     setIsSubmitting(false)
   }
 
-  const handleOpenChange = useCallback((isOpen: boolean) => {
+  const handleOpenChange = (isOpen: boolean) => {
     if (isOpen) {
-      // Reset form to current signup page values
+      // Reset form to current signup page values - use ref to avoid stale closure
+      const currentPage = signupPageRef.current
       setFormData({
-        title: signupPage.title,
-        message: signupPage.message || "",
-        allow_open_donations: signupPage.allow_open_donations,
+        title: currentPage.title,
+        message: currentPage.message || "",
+        allow_open_donations: currentPage.allow_open_donations,
       })
       hasLoadedRef.current = false
-      setOpen(true)
       // Load items after setting open
       loadSelectedItems()
-    } else {
-      setOpen(false)
-      hasLoadedRef.current = false
     }
-  }, [signupPage, loadSelectedItems])
+    setOpen(isOpen)
+    
+    if (!isOpen) {
+      // Reset state after dialog close animation completes
+      setTimeout(() => {
+        hasLoadedRef.current = false
+        setSelectedItemIds([])
+      }, 200)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

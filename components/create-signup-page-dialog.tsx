@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useRef } from "react"
 import { Plus, Link as LinkIcon, Copy, Check, ExternalLink } from "lucide-react"
 import {
   Dialog,
@@ -47,8 +47,10 @@ export function CreateSignupPageDialog({
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
   const [formData, setFormData] = useState(initialFormData)
   
-  // Use ref to track initialization - prevents re-running on every render
+  // Use refs to avoid stale closures and dependency issues
   const hasInitializedRef = useRef(false)
+  const itemsRef = useRef(items)
+  itemsRef.current = items
 
   // Filter to only show items with "needed" status
   const availableItems = items.filter(item => item.status === "needed")
@@ -71,22 +73,22 @@ export function CreateSignupPageDialog({
     }))
   }
 
-  const handleSelectAll = useCallback(() => {
+  const handleSelectAll = () => {
     const neededIds = items.filter(item => item.status === "needed").map(item => item.id)
     setSelectedItemIds(neededIds)
-  }, [items])
+  }
 
-  const handleDeselectAll = useCallback(() => {
+  const handleDeselectAll = () => {
     setSelectedItemIds([])
-  }, [])
+  }
 
-  const toggleItem = useCallback((itemId: string) => {
+  const toggleItem = (itemId: string) => {
     setSelectedItemIds(prev => 
       prev.includes(itemId)
         ? prev.filter(id => id !== itemId)
         : [...prev, itemId]
     )
-  }, [])
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -131,23 +133,26 @@ export function CreateSignupPageDialog({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleOpenChange = useCallback((isOpen: boolean) => {
+  const handleOpenChange = (isOpen: boolean) => {
     if (isOpen) {
-      // Initialize selection when opening
-      const neededIds = items.filter(item => item.status === "needed").map(item => item.id)
+      // Initialize selection when opening - use ref to avoid stale closure
+      const neededIds = itemsRef.current.filter(item => item.status === "needed").map(item => item.id)
       setSelectedItemIds(neededIds)
       hasInitializedRef.current = true
-      setOpen(true)
-    } else {
-      // Clean close - just close, reset happens on next open
-      setOpen(false)
-      setCreatedSlug(null)
-      setCopied(false)
-      setSelectedItemIds([])
-      setFormData(initialFormData)
-      hasInitializedRef.current = false
     }
-  }, [items])
+    setOpen(isOpen)
+    
+    if (!isOpen) {
+      hasInitializedRef.current = false
+      // Reset state after dialog close animation completes
+      setTimeout(() => {
+        setCreatedSlug(null)
+        setCopied(false)
+        setSelectedItemIds([])
+        setFormData(initialFormData)
+      }, 200)
+    }
+  }
 
   const publicUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/donate/${formData.slug || "your-page"}`
 
