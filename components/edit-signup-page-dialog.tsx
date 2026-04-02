@@ -45,10 +45,8 @@ export function EditSignupPageDialog({
     allow_open_donations: signupPage.allow_open_donations,
   })
 
-  // Filter to only show items that need donations (needed/contacted status or unassigned)
-  const availableItems = items.filter(item => 
-    item.status === "needed" || item.status === "contacted" || !item.package_id
-  )
+  // Filter to only show items with "needed" status
+  const availableItems = items.filter(item => item.status === "needed")
 
   // Load existing selected items when dialog opens
   useEffect(() => {
@@ -242,7 +240,7 @@ export function EditSignupPageDialog({
                     </p>
                   ) : availableItems.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                      No items available. Items with Needed or Contacted status will appear here.
+                      No items available. Only items with Needed status will appear here.
                     </p>
                   ) : (
                     <div className="space-y-2">
