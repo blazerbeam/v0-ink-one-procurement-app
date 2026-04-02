@@ -33,11 +33,21 @@ interface AddItemDialogProps {
   volunteers: Volunteer[]
   onItemAdded: () => void
   onVolunteerAdded: () => void
+  defaultPackageId?: string
+  trigger?: React.ReactNode
 }
 
 const statusOptions: ItemStatus[] = ["expected", "contacted", "confirmed", "received", "missing", "fulfilled"]
 
-export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVolunteerAdded }: AddItemDialogProps) {
+export function AddItemDialog({ 
+  eventId, 
+  packages, 
+  volunteers, 
+  onItemAdded, 
+  onVolunteerAdded,
+  defaultPackageId,
+  trigger,
+}: AddItemDialogProps) {
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState<ItemFormData>({
@@ -48,8 +58,16 @@ export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVo
     estimated_value: "",
     status: "expected",
     owner_id: "",
-    package_id: "",
+    package_id: defaultPackageId || "",
   })
+
+  // Reset form when dialog opens with new defaultPackageId
+  const handleOpenChange = (newOpen: boolean) => {
+    if (newOpen && defaultPackageId) {
+      setFormData(prev => ({ ...prev, package_id: defaultPackageId }))
+    }
+    setOpen(newOpen)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -99,12 +117,14 @@ export function AddItemDialog({ eventId, packages, volunteers, onItemAdded, onVo
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Item
-        </Button>
+        {trigger || (
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Item
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
         <form onSubmit={handleSubmit}>
