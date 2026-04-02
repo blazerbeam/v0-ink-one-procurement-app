@@ -94,20 +94,13 @@ export function OutreachEmailSheet({
       setIsLoading(true)
       const supabase = createClient()
       
-      console.log("[v0] Loading outreach for item:", item.id)
-      
       const { data, error } = await supabase
         .from("outreach")
         .select("*")
         .eq("item_id", item.id)
         .maybeSingle()
 
-      if (error) {
-        console.error("[v0] Supabase load error:", error)
-      }
-
       if (!error && data && data.generated_at) {
-        console.log("[v0] Found existing outreach:", data)
         // Found existing record with generated emails
         setAllEmails({
           professional: {
@@ -140,9 +133,9 @@ export function OutreachEmailSheet({
     loadExistingOutreach()
   }, [open, item?.id])
 
-  // Reset and populate form when item/event changes
+  // Reset and populate form when sheet opens with a new item
   useEffect(() => {
-    if (item && event) {
+    if (open && item && event) {
       setBusinessName(item.business_name || item.donor_name || "")
       setSpecificAsk(item.name || "")
       setSenderName(ownerName)
@@ -150,7 +143,7 @@ export function OutreachEmailSheet({
       setMission(event.mission || "")
       setTone("friendly")
     }
-  }, [item, event, ownerName])
+  }, [open, item?.id, event?.id]) // Only depend on IDs to prevent unnecessary re-runs
 
   // Progress animation during generation
   useEffect(() => {
@@ -181,10 +174,7 @@ export function OutreachEmailSheet({
   }, [isGenerating])
 
   const saveOutreachToSupabase = async (emails: AllEmails) => {
-    if (!item?.id) {
-      console.error("[v0] Cannot save outreach: item.id is missing")
-      return
-    }
+    if (!item?.id) return
 
     const supabase = createClient()
     const now = new Date().toISOString()

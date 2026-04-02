@@ -198,7 +198,6 @@ export function DraggablePackageCard({
                 /* When dimmed (no matching items), show subtle message */
                 <div className="px-6 pb-3 pt-0">
                   <p className="text-xs text-muted-foreground italic border-t pt-2">No matching items</p>
-                  {provided.placeholder}
                 </div>
               ) : (
                 <CollapsibleContent>
@@ -300,11 +299,11 @@ export function DraggablePackageCard({
                           )
                         })
                       )}
-                      {provided.placeholder}
                     </div>
                   </CardContent>
                 </CollapsibleContent>
               )}
+              {provided.placeholder}
             </div>
           </Collapsible>
         </Card>
