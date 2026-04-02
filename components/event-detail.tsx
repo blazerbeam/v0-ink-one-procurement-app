@@ -81,7 +81,7 @@ async function fetchEventData(eventId: string) {
   }
 }
 
-const statusOptions: ItemStatus[] = ["desired", "contacted", "confirmed", "received", "fulfilled", "declined"]
+const statusOptions: ItemStatus[] = ["needed", "contacted", "confirmed", "received", "fulfilled", "declined"]
 
 export function EventDetail({ eventId }: EventDetailProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -91,7 +91,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
   const [isMounted, setIsMounted] = useState(false)
   
   // Filter state
-  type StatusFilter = "all" | "needs-follow-up" | "unassigned" | "received" | "contacted"
+  type StatusFilter = "all" | "needed" | "contacted" | "received" | "needs-follow-up" | "unassigned"
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all")
   const [statCardFilter, setStatCardFilter] = useState<"needs-follow-up" | "progress" | null>(null)
@@ -149,14 +149,15 @@ export function EventDetail({ eventId }: EventDetailProps) {
     }
     
     // Status filter
+    if (statusFilter === "needed" && item.status !== "needed") return false
+    if (statusFilter === "contacted" && item.status !== "contacted") return false
+    if (statusFilter === "received" && item.status !== "received") return false
     if (statusFilter === "needs-follow-up") {
       if (item.status !== "contacted") return false
       const updatedAt = new Date(item.updated_at)
       if (updatedAt >= sevenDaysAgo) return false
     }
     if (statusFilter === "unassigned" && item.package_id) return false
-    if (statusFilter === "received" && item.status !== "received") return false
-    if (statusFilter === "contacted" && item.status !== "contacted") return false
     
     // Assignee filter
     if (assigneeFilter !== "all") {
@@ -836,7 +837,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
             {/* Status filter pills */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium text-muted-foreground mr-1">Status:</span>
-              {(["all", "needs-follow-up", "unassigned", "received", "contacted"] as const).map((filter) => (
+              {(["all", "needed", "contacted", "received", "needs-follow-up", "unassigned"] as const).map((filter) => (
                 <Button
                   key={filter}
                   variant={statusFilter === filter && !statCardFilter ? "default" : "outline"}
@@ -848,10 +849,11 @@ export function EventDetail({ eventId }: EventDetailProps) {
                   }}
                 >
                   {filter === "all" && "All"}
+                  {filter === "needed" && "Needed"}
+                  {filter === "contacted" && "Contacted"}
+                  {filter === "received" && "Received"}
                   {filter === "needs-follow-up" && "Needs Follow-up"}
                   {filter === "unassigned" && "Unassigned"}
-                  {filter === "received" && "Received"}
-                  {filter === "contacted" && "Contacted"}
                 </Button>
               ))}
             </div>

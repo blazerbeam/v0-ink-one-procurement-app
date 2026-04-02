@@ -42,7 +42,7 @@ export interface EventFormData {
   website: string
 }
 
-export type ItemStatus = 'desired' | 'contacted' | 'confirmed' | 'received' | 'declined' | 'fulfilled'
+export type ItemStatus = 'needed' | 'contacted' | 'confirmed' | 'received' | 'declined' | 'fulfilled'
 
 export interface Package {
   id: string
@@ -151,7 +151,7 @@ export interface SignupPageItem {
 
 // Status display labels
 export const STATUS_LABELS: Record<ItemStatus, string> = {
-  desired: 'Desired',
+  needed: 'Needed',
   contacted: 'Contacted',
   confirmed: 'Confirmed',
   received: 'Received',

@@ -32,12 +32,12 @@ export default async function DonatePage({ params }: PageProps) {
     notFound()
   }
 
-  // Fetch available items (desired/contacted status, not yet claimed via signup)
+  // Fetch available items (needed/contacted status, not yet claimed via signup)
   const { data: items } = await supabase
     .from("items")
     .select("id, name, description, estimated_value, status")
     .eq("event_id", signupPage.event_id)
-    .in("status", ["desired", "contacted"])
+    .in("status", ["needed", "contacted"])
     .order("name")
 
   return (
