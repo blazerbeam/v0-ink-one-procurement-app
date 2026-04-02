@@ -65,6 +65,7 @@ export function EditItemSheet({
     status: "needed" as ItemStatus,
     owner_id: "none",
     package_id: "none",
+    notes: "",
   })
 
   // Update form data when item changes - only when sheet is open
@@ -95,6 +96,7 @@ export function EditItemSheet({
         status: item.status,
         owner_id: ownerId,
         package_id: item.package_id || "none",
+        notes: item.notes || "",
       })
     }
   }, [open, item, volunteers])
@@ -127,6 +129,7 @@ export function EditItemSheet({
         owner_id: ownerId,
         owner_name: ownerName,
         package_id: packageId,
+        notes: formData.notes.trim() || null,
       })
       .eq("id", item.id)
 
@@ -269,6 +272,17 @@ export function EditItemSheet({
                   ))}
                 </SelectContent>
               </Select>
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="notes">Notes</FieldLabel>
+              <Textarea
+                id="notes"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Any additional context, instructions, or details about this item..."
+                rows={3}
+              />
             </Field>
           </FieldGroup>
 

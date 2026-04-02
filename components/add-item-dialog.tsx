@@ -59,6 +59,7 @@ export function AddItemDialog({
     status: "needed",
     owner_id: "",
     package_id: defaultPackageId || "",
+    notes: "",
   })
 
   // Reset form when dialog opens with new defaultPackageId
@@ -96,6 +97,7 @@ export function AddItemDialog({
       owner_id: ownerId,
       owner_name: ownerName,
       package_id: packageId,
+      notes: formData.notes.trim() || null,
     })
 
     setIsSubmitting(false)
@@ -110,6 +112,7 @@ export function AddItemDialog({
         status: "needed",
         owner_id: "",
         package_id: "",
+        notes: "",
       })
       setOpen(false)
       onItemAdded()
@@ -254,6 +257,16 @@ export function AddItemDialog({
                 </Select>
               </Field>
             )}
+            <Field>
+              <FieldLabel htmlFor="notes">Notes</FieldLabel>
+              <Textarea
+                id="notes"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Any additional context, instructions, or details about this item..."
+                rows={3}
+              />
+            </Field>
           </FieldGroup>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

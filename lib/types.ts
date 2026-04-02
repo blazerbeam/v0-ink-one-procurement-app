@@ -68,6 +68,7 @@ export interface Item {
   owner_name: string | null
   owner_id: string | null
   owner?: Volunteer | null
+  notes: string | null
   created_at: string
   updated_at: string
 }
@@ -81,6 +82,7 @@ export interface ItemFormData {
   status: ItemStatus
   owner_id: string
   package_id: string
+  notes: string
 }
 
 export interface PackageFormData {
