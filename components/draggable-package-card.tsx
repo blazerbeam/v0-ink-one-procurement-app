@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Droppable, Draggable } from "@hello-pangea/dnd"
-import { ChevronDown, ChevronRight, GripVertical, Mail, MoreHorizontal, Plus, Trash2, UserCircle } from "lucide-react"
+import { ChevronDown, ChevronRight, FileText, GripVertical, Mail, MoreHorizontal, Plus, Trash2, UserCircle } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,6 +18,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ItemStatusBadge } from "@/components/item-status-badge"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { Item, ItemStatus, Package, Volunteer, STATUS_LABELS } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { AddItemDialog } from "./add-item-dialog"
@@ -236,6 +242,18 @@ export function DraggablePackageCard({
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2">
                                         <span className="font-medium truncate">{item.name}</span>
+                                        {item.notes && (
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                              </TooltipTrigger>
+                                              <TooltipContent side="top" className="max-w-xs">
+                                                <p className="text-sm">{item.notes}</p>
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        )}
                                         <ItemStatusBadge status={item.status} />
                                       </div>
                                       <div className="flex items-center gap-3 text-sm text-muted-foreground">

@@ -20,7 +20,13 @@ import { Button } from "@/components/ui/button"
 import { ItemStatusBadge } from "@/components/item-status-badge"
 import { Item, ItemStatus, Package, STATUS_LABELS } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
-import { MoreHorizontal, Trash2 } from "lucide-react"
+import { FileText, MoreHorizontal, Trash2 } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface ItemsTableProps {
   items: Item[]
@@ -85,7 +91,21 @@ export function ItemsTable({ items, packages, onUpdate }: ItemsTableProps) {
             <TableRow key={item.id} className={updatingId === item.id ? "opacity-50" : ""}>
               <TableCell>
                 <div>
-                  <div className="font-medium">{item.name}</div>
+                  <div className="font-medium flex items-center gap-1.5">
+                    {item.name}
+                    {item.notes && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            <p className="text-sm">{item.notes}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
                   {item.description && (
                     <div className="text-sm text-muted-foreground line-clamp-1">
                       {item.description}
