@@ -45,7 +45,7 @@ interface EditItemSheetProps {
   onUpdate: () => void
 }
 
-const statusOptions: ItemStatus[] = ["expected", "contacted", "confirmed", "received", "missing", "fulfilled"]
+const statusOptions: ItemStatus[] = ["desired", "contacted", "confirmed", "received", "fulfilled", "declined"]
 
 export function EditItemSheet({
   item,
@@ -62,7 +62,7 @@ export function EditItemSheet({
     business_name: "",
     contact_name: "",
     estimated_value: "",
-    status: "expected" as ItemStatus,
+    status: "desired" as ItemStatus,
     owner_id: "none",
     package_id: "none",
   })

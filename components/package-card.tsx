@@ -28,7 +28,7 @@ interface PackageCardProps {
   onItemClick?: (item: Item) => void
 }
 
-const statusOptions: ItemStatus[] = ["expected", "confirmed", "received", "missing", "fulfilled"]
+const statusOptions: ItemStatus[] = ["desired", "contacted", "confirmed", "received", "fulfilled", "declined"]
 
 export function PackageCard({ pkg, items, volunteers, onUpdate, onItemClick }: PackageCardProps) {
   const [isOpen, setIsOpen] = useState(true)
