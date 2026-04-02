@@ -24,11 +24,14 @@ import { createClient } from "@/lib/supabase/client"
 interface DraggablePackageCardProps {
   pkg: Package
   items: Item[]
+  allItems?: Item[] // All items in package before filtering
   volunteers: Volunteer[]
   onUpdate: () => void
   onItemClick?: (item: Item) => void
   onOutreachClick?: (item: Item) => void
   isDragOver?: boolean
+  isDimmed?: boolean // Show package as dimmed when no matching items
+  filterLabel?: string // e.g. "2 of 4 items at risk"
 }
 
 const statusOptions: ItemStatus[] = ["expected", "contacted", "confirmed", "received", "missing", "fulfilled"]
@@ -36,11 +39,14 @@ const statusOptions: ItemStatus[] = ["expected", "contacted", "confirmed", "rece
 export function DraggablePackageCard({ 
   pkg, 
   items, 
+  allItems,
   volunteers, 
   onUpdate, 
   onItemClick,
   onOutreachClick,
-  isDragOver = false
+  isDragOver = false,
+  isDimmed = false,
+  filterLabel,
 }: DraggablePackageCardProps) {
   const [isOpen, setIsOpen] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
@@ -56,8 +62,10 @@ export function DraggablePackageCard({
     return volunteer ? `${volunteer.first_name} ${volunteer.last_name}` : null
   }
 
-  const totalValue = items.reduce((sum, item) => sum + (item.estimated_value || 0), 0)
-  const securedItems = items.filter((item) =>
+  // Use allItems for totals if provided, otherwise use filtered items
+  const itemsForTotals = allItems || items
+  const totalValue = itemsForTotals.reduce((sum, item) => sum + (item.estimated_value || 0), 0)
+  const securedItems = itemsForTotals.filter((item) =>
     ["confirmed", "received", "fulfilled"].includes(item.status)
   )
 
@@ -107,7 +115,7 @@ export function DraggablePackageCard({
             snapshot.isDraggingOver || isDragOver
               ? "ring-2 ring-primary border-primary bg-primary/5" 
               : ""
-          }`}
+          } ${isDimmed ? "opacity-50" : ""}`}
         >
           <Collapsible open={isOpen} onOpenChange={setIsOpen}>
             <CardHeader className="py-3">
@@ -121,8 +129,13 @@ export function DraggablePackageCard({
                     )}
                     <span className="font-semibold">{pkg.name}</span>
                     <span className="text-sm text-muted-foreground">
-                      ({items.length} {items.length === 1 ? "item" : "items"})
+                      ({itemsForTotals.length} {itemsForTotals.length === 1 ? "item" : "items"})
                     </span>
+                    {filterLabel && (
+                      <span className="text-xs font-medium text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded">
+                        {filterLabel}
+                      </span>
+                    )}
                   </Button>
                 </CollapsibleTrigger>
                 <div className="flex items-center gap-2">
