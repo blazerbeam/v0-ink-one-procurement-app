@@ -28,7 +28,7 @@ interface ItemsTableProps {
   onUpdate: () => void
 }
 
-const statusOptions: ItemStatus[] = ["expected", "confirmed", "received", "missing", "fulfilled"]
+const statusOptions: ItemStatus[] = ["desired", "contacted", "confirmed", "received", "fulfilled", "declined"]
 
 export function ItemsTable({ items, packages, onUpdate }: ItemsTableProps) {
   const [updatingId, setUpdatingId] = useState<string | null>(null)

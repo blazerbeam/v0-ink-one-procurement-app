@@ -37,7 +37,7 @@ interface AddItemDialogProps {
   trigger?: React.ReactNode
 }
 
-const statusOptions: ItemStatus[] = ["expected", "contacted", "confirmed", "received", "missing", "fulfilled"]
+const statusOptions: ItemStatus[] = ["desired", "contacted", "confirmed", "received", "fulfilled", "declined"]
 
 export function AddItemDialog({ 
   eventId, 
@@ -56,7 +56,7 @@ export function AddItemDialog({
     business_name: "",
     contact_name: "",
     estimated_value: "",
-    status: "expected",
+    status: "desired",
     owner_id: "",
     package_id: defaultPackageId || "",
   })
@@ -107,7 +107,7 @@ export function AddItemDialog({
         business_name: "",
         contact_name: "",
         estimated_value: "",
-        status: "expected",
+        status: "desired",
         owner_id: "",
         package_id: "",
       })

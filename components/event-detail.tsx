@@ -81,7 +81,7 @@ async function fetchEventData(eventId: string) {
   }
 }
 
-const statusOptions: ItemStatus[] = ["expected", "contacted", "confirmed", "received", "missing", "fulfilled"]
+const statusOptions: ItemStatus[] = ["desired", "contacted", "confirmed", "received", "fulfilled", "declined"]
 
 export function EventDetail({ eventId }: EventDetailProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -91,10 +91,10 @@ export function EventDetail({ eventId }: EventDetailProps) {
   const [isMounted, setIsMounted] = useState(false)
   
   // Filter state
-  type StatusFilter = "all" | "at-risk" | "unassigned" | "received" | "contacted"
+  type StatusFilter = "all" | "needs-follow-up" | "unassigned" | "received" | "contacted"
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all")
-  const [statCardFilter, setStatCardFilter] = useState<"at-risk" | "progress" | null>(null)
+  const [statCardFilter, setStatCardFilter] = useState<"needs-follow-up" | "progress" | null>(null)
 
   // Fix for @hello-pangea/dnd SSR hydration
   useEffect(() => {
@@ -119,7 +119,15 @@ export function EventDetail({ eventId }: EventDetailProps) {
 
   // Items by category
   const unassignedItems = items.filter((item) => !item.package_id)
-  const atRiskItems = items.filter((item) => item.status === "expected" || item.status === "missing")
+  
+  // Needs Follow-up: items with status "contacted" that haven't been updated in 7+ days
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+  const needsFollowUpItems = items.filter((item) => {
+    if (item.status !== "contacted") return false
+    const updatedAt = new Date(item.updated_at)
+    return updatedAt < sevenDaysAgo
+  })
 
   // Get volunteer name by id - must be defined before filterItem uses it
   const getVolunteerName = (ownerId: string | null): string | null => {
@@ -131,14 +139,21 @@ export function EventDetail({ eventId }: EventDetailProps) {
   // Filter logic
   const filterItem = (item: Item): boolean => {
     // Stat card filter takes precedence
-    if (statCardFilter === "at-risk") {
-      if (item.status !== "expected" && item.status !== "missing") return false
+    if (statCardFilter === "needs-follow-up") {
+      // Only show items that are in needsFollowUpItems
+      if (item.status !== "contacted") return false
+      const updatedAt = new Date(item.updated_at)
+      if (updatedAt >= sevenDaysAgo) return false
     } else if (statCardFilter === "progress") {
       if (item.status !== "confirmed" && item.status !== "received") return false
     }
     
     // Status filter
-    if (statusFilter === "at-risk" && item.status !== "expected" && item.status !== "missing") return false
+    if (statusFilter === "needs-follow-up") {
+      if (item.status !== "contacted") return false
+      const updatedAt = new Date(item.updated_at)
+      if (updatedAt >= sevenDaysAgo) return false
+    }
     if (statusFilter === "unassigned" && item.package_id) return false
     if (statusFilter === "received" && item.status !== "received") return false
     if (statusFilter === "contacted" && item.status !== "contacted") return false
@@ -177,7 +192,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
     setStatCardFilter(null)
   }
 
-  const toggleStatCardFilter = (filter: "at-risk" | "progress") => {
+  const toggleStatCardFilter = (filter: "needs-follow-up" | "progress") => {
     if (statCardFilter === filter) {
       setStatCardFilter(null)
     } else {
@@ -536,10 +551,14 @@ export function EventDetail({ eventId }: EventDetailProps) {
                 const isDimmed = isFiltered && filteredPkgItems.length === 0
                 
                 if (isFiltered && pkgItems.length > 0) {
-                  if (statCardFilter === "at-risk" || statusFilter === "at-risk") {
-                    const atRiskCount = pkgItems.filter(i => i.status === "expected" || i.status === "missing").length
-                    if (atRiskCount > 0) {
-                      filterLabel = `${atRiskCount} of ${pkgItems.length} at risk`
+                  if (statCardFilter === "needs-follow-up" || statusFilter === "needs-follow-up") {
+                    const followUpCount = pkgItems.filter(i => {
+                      if (i.status !== "contacted") return false
+                      const updatedAt = new Date(i.updated_at)
+                      return updatedAt < sevenDaysAgo
+                    }).length
+                    if (followUpCount > 0) {
+                      filterLabel = `${followUpCount} of ${pkgItems.length} need follow-up`
                     }
                   } else if (assigneeFilter !== "all") {
                     if (filteredPkgItems.length > 0) {
@@ -620,30 +639,30 @@ export function EventDetail({ eventId }: EventDetailProps) {
             )}
           </Droppable>
 
-          {/* At Risk Items - Read only, not droppable */}
+          {/* Needs Follow-up Items - Read only, not droppable */}
           <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-400">
                 <AlertTriangle className="h-4 w-4" />
-                At Risk
+                Needs Follow-up
               </CardTitle>
               <CardDescription>
-                Expected items that need follow-up
+                Contacted items not updated in 7+ days
               </CardDescription>
             </CardHeader>
             <CardContent>
               {(() => {
-                const filteredAtRisk = atRiskItems.filter(filterItem)
-                if (filteredAtRisk.length === 0) {
+                const filteredFollowUp = needsFollowUpItems.filter(filterItem)
+                if (filteredFollowUp.length === 0) {
                   return (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                      {isFiltered ? "No matching items" : "No items at risk"}
+                      {isFiltered ? "No matching items" : "No items need follow-up"}
                     </p>
                   )
                 }
                 return (
                   <div className="space-y-2">
-                    {filteredAtRisk.map((item) => {
+                    {filteredFollowUp.map((item) => {
                       const ownerName = getVolunteerName(item.owner_id) || item.owner_name
                       return (
                         <div
@@ -765,17 +784,17 @@ export function EventDetail({ eventId }: EventDetailProps) {
             </Card>
             <Card 
               className={`min-w-[180px] md:min-w-0 snap-start cursor-pointer transition-all hover:bg-muted/50 ${
-                statCardFilter === "at-risk" ? "ring-2 ring-green-500 border-green-500" : ""
+                statCardFilter === "needs-follow-up" ? "ring-2 ring-green-500 border-green-500" : ""
               }`}
-              onClick={() => toggleStatCardFilter("at-risk")}
+              onClick={() => toggleStatCardFilter("needs-follow-up")}
             >
               <CardHeader className="pb-2">
                 <CardDescription className="flex items-center justify-between">
                   <span className="flex items-center gap-2 text-amber-600">
                     <AlertTriangle className="h-4 w-4" />
-                    At Risk
+                    Needs Follow-up
                   </span>
-                  {statCardFilter === "at-risk" && (
+                  {statCardFilter === "needs-follow-up" && (
                     <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
                       <X className="h-3 w-3" /> Clear
                     </span>
@@ -784,10 +803,10 @@ export function EventDetail({ eventId }: EventDetailProps) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-amber-600">
-                  {atRiskItems.length}
+                  {needsFollowUpItems.length}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  items need follow-up
+                  contacted 7+ days ago
                 </p>
               </CardContent>
             </Card>
@@ -817,7 +836,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
             {/* Status filter pills */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium text-muted-foreground mr-1">Status:</span>
-              {(["all", "at-risk", "unassigned", "received", "contacted"] as const).map((filter) => (
+              {(["all", "needs-follow-up", "unassigned", "received", "contacted"] as const).map((filter) => (
                 <Button
                   key={filter}
                   variant={statusFilter === filter && !statCardFilter ? "default" : "outline"}
@@ -829,7 +848,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
                   }}
                 >
                   {filter === "all" && "All"}
-                  {filter === "at-risk" && "At Risk"}
+                  {filter === "needs-follow-up" && "Needs Follow-up"}
                   {filter === "unassigned" && "Unassigned"}
                   {filter === "received" && "Received"}
                   {filter === "contacted" && "Contacted"}
@@ -863,7 +882,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
                 <Check className="h-4 w-4 text-green-600" />
                 <span className="text-green-700 dark:text-green-400">
                   Filtered: 
-                  {statCardFilter === "at-risk" && " At Risk"}
+                  {statCardFilter === "needs-follow-up" && " Needs Follow-up"}
                   {statCardFilter === "progress" && " In Progress"}
                   {statusFilter !== "all" && !statCardFilter && ` ${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1).replace("-", " ")}`}
                   {assigneeFilter !== "all" && (() => {
