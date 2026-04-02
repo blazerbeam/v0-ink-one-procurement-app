@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Plus, Link as LinkIcon, Copy, Check, ExternalLink } from "lucide-react"
 import {
   Dialog,
@@ -38,6 +38,7 @@ export function CreateSignupPageDialog({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [createdSlug, setCreatedSlug] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
   
   const [formData, setFormData] = useState({
     title: "",
@@ -48,11 +49,18 @@ export function CreateSignupPageDialog({
 
   // Filter to only show items with "needed" status
   const availableItems = items.filter(item => item.status === "needed")
-
-  // Pre-select all available items by default
-  const [selectedItemIds, setSelectedItemIds] = useState<string[]>(() => 
-    items.filter(item => item.status === "needed").map(item => item.id)
-  )
+  
+  // Track if dialog was just opened to initialize selection once
+  const wasOpenRef = useRef(false)
+  
+  useEffect(() => {
+    // Only initialize when dialog opens (transition from closed to open)
+    if (open && !wasOpenRef.current && !createdSlug) {
+      const neededItems = items.filter(item => item.status === "needed")
+      setSelectedItemIds(neededItems.map(item => item.id))
+    }
+    wasOpenRef.current = open
+  }, [open, items, createdSlug])
 
   // Generate slug from title
   const generateSlug = (title: string) => {
@@ -133,25 +141,23 @@ export function CreateSignupPageDialog({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setOpen(false)
-    // Reset after animation
-    setTimeout(() => {
-      setCreatedSlug(null)
-      setSelectedItemIds([])
-      setFormData({
-        title: "",
-        slug: "",
-        message: "",
-        allow_open_donations: false,
-      })
-    }, 200)
-  }
+    setCreatedSlug(null)
+    setCopied(false)
+    setSelectedItemIds([])
+    setFormData({
+      title: "",
+      slug: "",
+      message: "",
+      allow_open_donations: false,
+    })
+  }, [])
 
   const publicUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/donate/${formData.slug || "your-page"}`
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => isOpen ? setOpen(true) : handleClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (isOpen) setOpen(true); else handleClose(); }}>
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />

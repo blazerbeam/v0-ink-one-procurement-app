@@ -189,19 +189,18 @@ export function DraggablePackageCard({
                 <p className="text-sm text-muted-foreground mt-1 ml-6">{pkg.description}</p>
               )}
             </CardHeader>
-            {/* When dimmed (no matching items), show subtle message */}
-            {isDimmed && (
-              <div className="px-6 pb-3 pt-0">
-                <p className="text-xs text-muted-foreground italic border-t pt-2">No matching items</p>
-              </div>
-            )}
-            {/* Hidden droppable ref for drag-drop to work */}
+            {/* Droppable area - always rendered for drag-drop to work */}
             <div 
               ref={provided.innerRef} 
               {...provided.droppableProps}
-              className={isDimmed ? "hidden" : ""}
             >
-              {!isDimmed && (
+              {isDimmed ? (
+                /* When dimmed (no matching items), show subtle message */
+                <div className="px-6 pb-3 pt-0">
+                  <p className="text-xs text-muted-foreground italic border-t pt-2">No matching items</p>
+                  {provided.placeholder}
+                </div>
+              ) : (
                 <CollapsibleContent>
                   <CardContent className="pt-0">
                     <div
@@ -301,11 +300,11 @@ export function DraggablePackageCard({
                           )
                         })
                       )}
+                      {provided.placeholder}
                     </div>
                   </CardContent>
                 </CollapsibleContent>
               )}
-              {provided.placeholder}
             </div>
           </Collapsible>
         </Card>
