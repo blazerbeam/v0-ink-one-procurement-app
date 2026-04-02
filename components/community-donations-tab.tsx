@@ -1,6 +1,6 @@
 "use client"
 
-// All modals are inline in this component - no external dialog imports needed
+// All modals are inline - no external dialog components used
 import { useState } from "react"
 import useSWR from "swr"
 import {

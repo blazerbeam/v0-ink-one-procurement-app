@@ -74,10 +74,10 @@ export default function LandingPage() {
       <section className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight tracking-tight">
-            Stop running your auction out of a spreadsheet.
+            Stop running your auction procurement out of a spreadsheet.
           </h1>
           <p className="mt-6 text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            inKind keeps your auction items, donor outreach, and packages in one place — so your team stays aligned from first ask to final receipt.
+            inKind manages the messy work before the event — sourcing items, tracking outreach, organizing packages, and keeping your team aligned from first ask to final receipt.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <a href="#waitlist">
