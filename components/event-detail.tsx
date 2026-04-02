@@ -154,8 +154,8 @@ export function EventDetail({ eventId }: EventDetailProps) {
           // Fallback: check if owner_name text matches the volunteer name
           const volFullName = `${selectedVolunteer.first_name} ${selectedVolunteer.last_name}`.toLowerCase()
           const volFirstName = selectedVolunteer.first_name.toLowerCase()
-          const ownerNameLower = item.owner_name.toLowerCase()
-          if (ownerNameLower !== volFullName && ownerNameLower !== volFirstName) {
+          const ownerNameLower = (item.owner_name || "").toLowerCase()
+          if (!ownerNameLower || (ownerNameLower !== volFullName && ownerNameLower !== volFirstName)) {
             return false
           }
         } else {
