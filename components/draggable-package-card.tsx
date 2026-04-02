@@ -38,7 +38,7 @@ interface DraggablePackageCardProps {
   filterLabel?: string // e.g. "2 of 4 items at risk"
 }
 
-const statusOptions: ItemStatus[] = ["desired", "contacted", "confirmed", "received", "fulfilled", "declined"]
+const statusOptions: ItemStatus[] = ["needed", "contacted", "confirmed", "received", "fulfilled", "declined"]
 
 export function DraggablePackageCard({ 
   pkg, 

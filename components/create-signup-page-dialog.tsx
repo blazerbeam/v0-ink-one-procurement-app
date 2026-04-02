@@ -46,15 +46,15 @@ export function CreateSignupPageDialog({
     allow_open_donations: false,
   })
 
-  // Filter to only show items that need donations (desired/contacted status or unassigned)
+  // Filter to only show items that need donations (needed/contacted status or unassigned)
   const availableItems = items.filter(item => 
-    item.status === "desired" || item.status === "contacted" || !item.package_id
+    item.status === "needed" || item.status === "contacted" || !item.package_id
   )
 
   // Pre-select all available items by default
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>(() => 
     items.filter(item => 
-      item.status === "desired" || item.status === "contacted" || !item.package_id
+      item.status === "needed" || item.status === "contacted" || !item.package_id
     ).map(item => item.id)
   )
 
@@ -309,7 +309,7 @@ export function CreateSignupPageDialog({
                   <ScrollArea className="h-[200px] rounded-md border p-4">
                     {availableItems.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">
-                        No items available. Items with Desired or Contacted status will appear here.
+                        No items available. Items with Needed or Contacted status will appear here.
                       </p>
                     ) : (
                       <div className="space-y-2">
