@@ -48,12 +48,10 @@ export function DonatePageClient({ signupPage, event, availableItems }: DonatePa
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return null
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })
+    const date = new Date(dateStr + "T00:00:00") // Force consistent timezone parsing
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    return `${days[date.getDay()]}, ${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`
   }
 
   const toggleItem = (itemId: string) => {

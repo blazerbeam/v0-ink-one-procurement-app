@@ -75,11 +75,11 @@ export function EditItemSheet({
       if (ownerId === "none" && item.owner_name) {
         // Try to find a volunteer matching the owner_name text
         const matchingVolunteer = volunteers.find(v => {
-          const fullName = `${v.first_name} ${v.last_name}`.toLowerCase()
+          const fullName = `${v.first_name || ""} ${v.last_name || ""}`.toLowerCase().trim()
           const ownerNameLower = item.owner_name?.toLowerCase() || ""
           return fullName === ownerNameLower || 
-                 v.first_name.toLowerCase() === ownerNameLower ||
-                 v.last_name.toLowerCase() === ownerNameLower
+                 (v.first_name || "").toLowerCase() === ownerNameLower ||
+                 (v.last_name || "").toLowerCase() === ownerNameLower
         })
         if (matchingVolunteer) {
           ownerId = matchingVolunteer.id

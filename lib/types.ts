@@ -142,6 +142,13 @@ export interface SignupSubmissionItem {
   created_at: string
 }
 
+export interface SignupPageItem {
+  id: string
+  signup_page_id: string
+  item_id: string
+  created_at: string
+}
+
 // Status display labels
 export const STATUS_LABELS: Record<ItemStatus, string> = {
   expected: 'Expected',

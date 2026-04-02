@@ -154,8 +154,8 @@ export function EventDetail({ eventId }: EventDetailProps) {
           // Fallback: check if owner_name text matches the volunteer name
           const volFullName = `${selectedVolunteer.first_name} ${selectedVolunteer.last_name}`.toLowerCase()
           const volFirstName = selectedVolunteer.first_name.toLowerCase()
-          const ownerNameLower = item.owner_name.toLowerCase()
-          if (ownerNameLower !== volFullName && ownerNameLower !== volFirstName) {
+          const ownerNameLower = (item.owner_name || "").toLowerCase()
+          if (!ownerNameLower || (ownerNameLower !== volFullName && ownerNameLower !== volFirstName)) {
             return false
           }
         } else {
@@ -887,7 +887,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
 
           {/* Tabs */}
           <Tabs defaultValue="items" className="space-y-4">
-<TabsList>
+            <TabsList>
               <TabsTrigger value="items">Items & Packages</TabsTrigger>
               <TabsTrigger value="volunteers">Volunteers ({volunteers.length})</TabsTrigger>
               <TabsTrigger value="community">Community</TabsTrigger>
@@ -899,7 +899,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
               <VolunteersTab />
             </TabsContent>
             <TabsContent value="community">
-              <CommunityDonationsTab eventId={eventId} eventName={event.event_name} />
+              <CommunityDonationsTab eventId={eventId} eventName={event.event_name} items={items} />
             </TabsContent>
           </Tabs>
         </div>

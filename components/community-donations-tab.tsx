@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   Users,
   Gift,
+  Pencil,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -34,15 +35,17 @@ import {
 } from "@/components/ui/table"
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { CreateSignupPageDialog } from "./create-signup-page-dialog"
+import { EditSignupPageDialog } from "./edit-signup-page-dialog"
 import { createClient } from "@/lib/supabase/client"
-import type { SignupPage, SignupSubmission } from "@/lib/types"
+import type { SignupPage, SignupSubmission, Item } from "@/lib/types"
 
 interface CommunityDonationsTabProps {
   eventId: string
   eventName: string
+  items: Item[]
 }
 
-export function CommunityDonationsTab({ eventId, eventName }: CommunityDonationsTabProps) {
+export function CommunityDonationsTab({ eventId, eventName, items }: CommunityDonationsTabProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   // Fetch signup pages
@@ -145,6 +148,7 @@ export function CommunityDonationsTab({ eventId, eventName }: CommunityDonations
         <CreateSignupPageDialog
           eventId={eventId}
           eventName={eventName}
+          items={items}
           onPageCreated={() => mutatePages()}
         />
       </div>
@@ -217,6 +221,17 @@ export function CommunityDonationsTab({ eventId, eventName }: CommunityDonations
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <EditSignupPageDialog
+                          signupPage={page}
+                          items={items}
+                          onPageUpdated={() => mutatePages()}
+                          trigger={
+                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                          }
+                        />
                         <DropdownMenuItem onClick={() => handleToggleActive(page)}>
                           {page.active ? "Deactivate" : "Activate"}
                         </DropdownMenuItem>
