@@ -120,6 +120,13 @@ export function EventDetail({ eventId }: EventDetailProps) {
   const unassignedItems = items.filter((item) => !item.package_id)
   const atRiskItems = items.filter((item) => item.status === "expected" || item.status === "missing")
 
+  // Get volunteer name by id - must be defined before filterItem uses it
+  const getVolunteerName = (ownerId: string | null): string | null => {
+    if (!ownerId) return null
+    const volunteer = volunteers.find(v => v.id === ownerId)
+    return volunteer ? `${volunteer.first_name} ${volunteer.last_name}` : null
+  }
+
   // Filter logic
   const filterItem = (item: Item): boolean => {
     // Stat card filter takes precedence
@@ -137,11 +144,23 @@ export function EventDetail({ eventId }: EventDetailProps) {
     
     // Assignee filter
     if (assigneeFilter !== "all") {
-      const ownerName = getVolunteerName(item.owner_id) || item.owner_name || ""
-      const volunteer = volunteers.find(v => v.id === assigneeFilter)
-      if (volunteer) {
-        const volName = `${volunteer.first_name} ${volunteer.last_name}`.toLowerCase()
-        if (ownerName.toLowerCase() !== volName) return false
+      const selectedVolunteer = volunteers.find(v => v.id === assigneeFilter)
+      if (selectedVolunteer) {
+        // Check if item.owner_id matches directly
+        if (item.owner_id === assigneeFilter) {
+          // Direct match via owner_id
+        } else if (item.owner_name) {
+          // Fallback: check if owner_name text matches the volunteer name
+          const volFullName = `${selectedVolunteer.first_name} ${selectedVolunteer.last_name}`.toLowerCase()
+          const volFirstName = selectedVolunteer.first_name.toLowerCase()
+          const ownerNameLower = item.owner_name.toLowerCase()
+          if (ownerNameLower !== volFullName && ownerNameLower !== volFirstName) {
+            return false
+          }
+        } else {
+          // No owner_id match and no owner_name - doesn't match this assignee
+          return false
+        }
       }
     }
     
@@ -165,13 +184,6 @@ export function EventDetail({ eventId }: EventDetailProps) {
       // Clear the status filter when using stat card filter
       setStatusFilter("all")
     }
-  }
-
-  // Get volunteer name by id
-  const getVolunteerName = (ownerId: string | null) => {
-    if (!ownerId) return null
-    const volunteer = volunteers.find(v => v.id === ownerId)
-    return volunteer ? `${volunteer.first_name} ${volunteer.last_name}` : null
   }
 
   const formatDate = (dateStr: string | null) => {
@@ -471,7 +483,29 @@ export function EventDetail({ eventId }: EventDetailProps) {
             <AddPackageDialog eventId={eventId} onPackageAdded={() => mutate()} />
           </div>
           
-          {packages.length === 0 ? (
+          {statusFilter === "unassigned" ? (
+            <Card className="border-dashed">
+              <CardContent className="py-12">
+                <Empty>
+                  <EmptyMedia variant="icon">
+                    <PackageIcon className="h-6 w-6" />
+                  </EmptyMedia>
+                  <EmptyTitle>Showing unassigned items only</EmptyTitle>
+                  <EmptyDescription>
+                    All {unassignedItems.length} unassigned item{unassignedItems.length !== 1 ? 's are' : ' is'} in the right column.
+                    <br />
+                    <Button 
+                      variant="link" 
+                      className="h-auto p-0 mt-2"
+                      onClick={() => setStatusFilter("all")}
+                    >
+                      Clear filter to see packages
+                    </Button>
+                  </EmptyDescription>
+                </Empty>
+              </CardContent>
+            </Card>
+          ) : packages.length === 0 ? (
             <Card>
               <CardContent className="py-12">
                 <Empty>
