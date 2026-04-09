@@ -14,11 +14,31 @@ export default function AppPage() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      // Check Supabase session first
       const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
+      
+      console.log("[v0] AppPage: Starting auth check...")
+      console.log("[v0] AppPage: Current URL hash:", window.location.hash)
+      
+      // Listen for auth state changes (handles magic link callback)
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        console.log("[v0] AppPage: Auth state changed:", event, session?.user?.email)
+        if (event === 'SIGNED_IN' && session) {
+          console.log("[v0] AppPage: User signed in via auth state change")
+          setIsAuthorized(true)
+          setIsLoading(false)
+        }
+      })
+      
+      // Check existing Supabase session
+      const { data: { session }, error } = await supabase.auth.getSession()
+      console.log("[v0] AppPage: getSession result:", { 
+        hasSession: !!session, 
+        userEmail: session?.user?.email,
+        error: error?.message 
+      })
       
       if (session) {
+        console.log("[v0] AppPage: Found valid Supabase session")
         setIsAuthorized(true)
         setIsLoading(false)
         return
@@ -26,14 +46,22 @@ export default function AppPage() {
       
       // Check demo password auth
       const demoAuth = localStorage.getItem("demoAuth")
+      console.log("[v0] AppPage: demoAuth localStorage value:", demoAuth)
       if (demoAuth === "true") {
+        console.log("[v0] AppPage: Found valid demo auth")
         setIsAuthorized(true)
         setIsLoading(false)
         return
       }
       
+      console.log("[v0] AppPage: No valid auth found, redirecting to /demo")
       // Not authorized, redirect to demo
       router.push("/demo")
+      
+      // Cleanup subscription on unmount
+      return () => {
+        subscription.unsubscribe()
+      }
     }
     
     checkAuth()
