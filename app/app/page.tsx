@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Heart } from "lucide-react"
 import { Header } from "@/components/header"
 import { Dashboard } from "@/components/dashboard"
+import { createClient } from "@/lib/supabase/client"
 
 export default function AppPage() {
   const router = useRouter()
@@ -12,13 +13,30 @@ export default function AppPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const demoAuth = localStorage.getItem("demoAuth")
-    if (demoAuth === "true") {
-      setIsAuthorized(true)
-    } else {
+    const checkAuth = async () => {
+      // Check Supabase session first
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        setIsAuthorized(true)
+        setIsLoading(false)
+        return
+      }
+      
+      // Check demo password auth
+      const demoAuth = localStorage.getItem("demoAuth")
+      if (demoAuth === "true") {
+        setIsAuthorized(true)
+        setIsLoading(false)
+        return
+      }
+      
+      // Not authorized, redirect to demo
       router.push("/demo")
     }
-    setIsLoading(false)
+    
+    checkAuth()
   }, [router])
 
   if (isLoading || !isAuthorized) {

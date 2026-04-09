@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Heart } from "lucide-react"
+import { Heart, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { createClient } from "@/lib/supabase/client"
 
 const DEMO_PASSWORD = "inkind2026"
 
@@ -13,15 +14,34 @@ export default function DemoPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(true)
+  const [email, setEmail] = useState("")
+  const [emailSent, setEmailSent] = useState(false)
+  const [emailError, setEmailError] = useState("")
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
 
-  // Check if already authenticated
+  // Check if already authenticated (demo password or Supabase session)
   useEffect(() => {
-    const demoAuth = localStorage.getItem("demoAuth")
-    if (demoAuth === "true") {
-      router.push("/app")
-    } else {
+    const checkAuth = async () => {
+      // Check Supabase session first
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        router.push("/app")
+        return
+      }
+      
+      // Check demo password auth
+      const demoAuth = localStorage.getItem("demoAuth")
+      if (demoAuth === "true") {
+        router.push("/app")
+        return
+      }
+      
       setIsLoading(false)
     }
+    
+    checkAuth()
   }, [router])
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -33,6 +53,39 @@ export default function DemoPage() {
       router.push("/app")
     } else {
       setError("Incorrect password. Try again.")
+    }
+  }
+
+  const handleMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setEmailError("")
+    setEmailSent(false)
+    
+    if (!email) {
+      setEmailError("Please enter your email address.")
+      return
+    }
+    
+    setIsSendingEmail(true)
+    
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/app`,
+        },
+      })
+      
+      if (error) {
+        setEmailError(error.message)
+      } else {
+        setEmailSent(true)
+      }
+    } catch {
+      setEmailError("Something went wrong. Please try again.")
+    } finally {
+      setIsSendingEmail(false)
     }
   }
 
@@ -87,10 +140,52 @@ export default function DemoPage() {
             Enter Demo
           </Button>
         </form>
+
+        {/* Divider */}
+        <div className="flex items-center gap-4 my-6">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-sm text-gray-500">or</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
+
+        {/* Magic Link Form */}
+        <form onSubmit={handleMagicLink} className="space-y-4">
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <Input
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setEmailError(""); setEmailSent(false); }}
+              className="h-12 pl-10"
+            />
+          </div>
+          
+          {emailError && (
+            <p className="text-red-600 text-sm text-center bg-red-50 rounded-lg px-4 py-2">
+              {emailError}
+            </p>
+          )}
+          
+          {emailSent && (
+            <p className="text-green-600 text-sm text-center bg-green-50 rounded-lg px-4 py-2">
+              Check your email for a sign-in link
+            </p>
+          )}
+          
+          <Button 
+            type="submit" 
+            variant="outline"
+            className="w-full h-12 border-gray-300 text-gray-700 hover:bg-gray-50"
+            disabled={isSendingEmail}
+          >
+            {isSendingEmail ? "Sending..." : "Send Magic Link"}
+          </Button>
+        </form>
         
         {/* Back link */}
         <p className="mt-6 text-center text-sm text-gray-500">
-          Don&apos;t have the password?{" "}
+          Don&apos;t have access?{" "}
           <a href="/#waitlist" className="text-green-600 hover:underline">
             Request access
           </a>
