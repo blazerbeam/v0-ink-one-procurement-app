@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import useSWR from "swr"
-import { Building2, PartyPopper, Pencil, Plus } from "lucide-react"
+import { Building2, Briefcase, PartyPopper, Pencil, Plus } from "lucide-react"
+import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { EventCard } from "@/components/event-card"
 import { CreateEventDialog } from "@/components/create-event-dialog"
@@ -254,6 +255,17 @@ export function Dashboard() {
                   >
                     <Pencil className="h-4 w-4" />
                     <span className="sr-only">Edit organization</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-muted-foreground hover:text-foreground"
+                    asChild
+                  >
+                    <Link href={`/app/businesses/${org.id}`}>
+                      <Briefcase className="mr-1.5 h-4 w-4" />
+                      Businesses
+                    </Link>
                   </Button>
                 </div>
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
