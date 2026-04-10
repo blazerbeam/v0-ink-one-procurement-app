@@ -21,6 +21,28 @@ export interface OrgMember {
   created_at: string
 }
 
+export interface Business {
+  id: string
+  org_id: string
+  name: string
+  category: string | null
+  website: string | null
+  notes: string | null
+  created_at: string
+}
+
+export interface Contact {
+  id: string
+  business_id: string
+  first_name: string
+  last_name: string | null
+  email: string | null
+  phone: string | null
+  title: string | null
+  notes: string | null
+  created_at: string
+}
+
 export interface Event {
   id: string
   org_id: string | null
