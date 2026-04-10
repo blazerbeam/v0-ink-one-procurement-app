@@ -222,6 +222,38 @@ export function EditItemSheet({
     }
   }, [contacts, item, formData.contact_id])
 
+  // Reset form when sheet closes
+  useEffect(() => {
+    if (!open) {
+      // Reset all form data to defaults
+      setFormData({
+        name: "",
+        description: "",
+        business_id: "none",
+        business_name: "",
+        contact_id: "none",
+        contact_name: "",
+        estimated_value: "",
+        status: "needed" as ItemStatus,
+        owner_id: "none",
+        package_id: "none",
+        notes: "",
+      })
+      // Reset related state
+      setBusinesses([])
+      setContacts([])
+      setOrgId(null)
+      // Reset inline dialog states
+      setNewBusinessName("")
+      setNewBusinessCategory("")
+      setNewContactFirstName("")
+      setNewContactLastName("")
+      setAddBusinessOpen(false)
+      setAddContactOpen(false)
+      setBusinessPopoverOpen(false)
+    }
+  }, [open])
+
   const handleBusinessSelect = (businessId: string) => {
     if (businessId === "add_new") {
       setBusinessPopoverOpen(false)
