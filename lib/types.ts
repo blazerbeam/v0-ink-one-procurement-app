@@ -107,7 +107,9 @@ export interface Item {
   name: string
   description: string | null
   donor_name: string | null // deprecated, use business_name
+  business_id: string | null
   business_name: string | null
+  contact_id: string | null
   contact_name: string | null
   estimated_value: number | null
   status: ItemStatus
