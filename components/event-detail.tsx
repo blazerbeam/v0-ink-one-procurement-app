@@ -75,9 +75,15 @@ async function fetchEventData(eventId: string) {
     supabase.from("volunteers").select("*").eq("event_id", eventId).order("first_name", { ascending: true }),
   ])
 
+  // Client-side sort to guarantee stable order regardless of what SWR or Supabase returns
+  const sortedPackages = (packagesResult.data || []).sort((a, b) => {
+    if (a.created_at === b.created_at) return a.id.localeCompare(b.id)
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  })
+
   return {
     event: eventResult.data as Event | null,
-    packages: (packagesResult.data || []) as Package[],
+    packages: sortedPackages as Package[],
     items: (itemsResult.data || []) as Item[],
     volunteers: (volunteersResult.data || []) as Volunteer[],
   }
