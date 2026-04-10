@@ -70,7 +70,7 @@ async function fetchEventData(eventId: string) {
   
   const [eventResult, packagesResult, itemsResult, volunteersResult] = await Promise.all([
     supabase.from("events").select("*").eq("id", eventId).single(),
-    supabase.from("packages").select("*").eq("event_id", eventId).order("created_at", { ascending: true }),
+    supabase.from("packages").select("*").eq("event_id", eventId).order("created_at", { ascending: true }).order("id", { ascending: true }),
     supabase.from("items").select("*").eq("event_id", eventId).order("created_at", { ascending: false }),
     supabase.from("volunteers").select("*").eq("event_id", eventId).order("first_name", { ascending: true }),
   ])
