@@ -260,13 +260,10 @@ export function AddItemDialog({
     }
   }
 
-  // Reset form when dialog opens with new defaultPackageId
+  // Reset form when dialog opens to guarantee clean state
   const handleOpenChange = (newOpen: boolean) => {
-    if (newOpen && defaultPackageId) {
-      setFormData(prev => ({ ...prev, package_id: defaultPackageId }))
-    }
-    if (!newOpen) {
-      // Reset form when closing
+    if (newOpen) {
+      // Reset all form fields to empty defaults when opening
       setFormData({
         name: "",
         description: "",
@@ -277,10 +274,21 @@ export function AddItemDialog({
         estimated_value: "",
         status: "needed",
         owner_id: "",
-        package_id: "",
+        package_id: defaultPackageId || "",
         notes: "",
       })
+      // Reset related state
       setContacts([])
+      setBusinesses([])
+      setOrgId(null)
+      // Reset inline dialog states
+      setNewBusinessName("")
+      setNewBusinessCategory("")
+      setNewContactFirstName("")
+      setNewContactLastName("")
+      setAddBusinessOpen(false)
+      setAddContactOpen(false)
+      setBusinessPopoverOpen(false)
     }
     setOpen(newOpen)
   }
