@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Droppable, Draggable } from "@hello-pangea/dnd"
-import { ChevronDown, ChevronRight, FileText, GripVertical, Mail, MoreHorizontal, Plus, Trash2, UserCircle } from "lucide-react"
+import { ChevronDown, ChevronRight, FileText, GripVertical, Mail, MoreHorizontal, Pencil, Plus, Trash2, UserCircle } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,6 +18,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ItemStatusBadge } from "@/components/item-status-badge"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Tooltip,
   TooltipContent,
@@ -64,6 +76,13 @@ export function DraggablePackageCard({
   const [isOpen, setIsOpen] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [isMounted, setIsMounted] = useState(false)
+  const [editSheetOpen, setEditSheetOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formData, setFormData] = useState({
+    name: pkg.name || "",
+    description: pkg.description || "",
+    notes: pkg.notes || "",
+  })
 
   useEffect(() => {
     setIsMounted(true)
@@ -101,6 +120,38 @@ export function DraggablePackageCard({
     await supabase.from("items").update({ package_id: null }).eq("package_id", pkg.id)
     await supabase.from("packages").delete().eq("id", pkg.id)
     onUpdate()
+  }
+
+  const handleEditPackage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.name.trim()) return
+
+    setIsSubmitting(true)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("packages")
+      .update({
+        name: formData.name.trim(),
+        description: formData.description.trim() || null,
+        notes: formData.notes.trim() || null,
+      })
+      .eq("id", pkg.id)
+
+    setIsSubmitting(false)
+
+    if (!error) {
+      setEditSheetOpen(false)
+      onUpdate()
+    }
+  }
+
+  const openEditSheet = () => {
+    setFormData({
+      name: pkg.name || "",
+      description: pkg.description || "",
+      notes: pkg.notes || "",
+    })
+    setEditSheetOpen(true)
   }
 
   // Don't render Droppable until mounted (SSR fix)
@@ -180,6 +231,11 @@ export function DraggablePackageCard({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={openEditSheet}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit Package
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={deletePackage}
                         className="text-destructive"
@@ -324,6 +380,70 @@ export function DraggablePackageCard({
               {provided.placeholder}
             </div>
           </Collapsible>
+
+          {/* Edit Package Sheet */}
+          <Sheet open={editSheetOpen} onOpenChange={setEditSheetOpen}>
+            <SheetContent className="sm:max-w-md overflow-y-auto">
+              <SheetHeader>
+                <SheetTitle>Edit Package</SheetTitle>
+                <SheetDescription>
+                  Update the package name, description, and notes.
+                </SheetDescription>
+              </SheetHeader>
+              <form onSubmit={handleEditPackage} className="mt-6 space-y-6">
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor={`pkg-name-${pkg.id}`}>Package Name *</FieldLabel>
+                    <Input
+                      id={`pkg-name-${pkg.id}`}
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      required
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor={`pkg-description-${pkg.id}`}>Description</FieldLabel>
+                    <Textarea
+                      id={`pkg-description-${pkg.id}`}
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      placeholder="Brief description of what this package contains..."
+                      rows={3}
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor={`pkg-notes-${pkg.id}`}>Notes</FieldLabel>
+                    <Textarea
+                      id={`pkg-notes-${pkg.id}`}
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder="Any additional context or instructions..."
+                      rows={3}
+                    />
+                  </Field>
+                </FieldGroup>
+
+                <SheetFooter className="flex-col gap-3 sm:flex-col">
+                  <div className="flex gap-2 w-full">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setEditSheetOpen(false)}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting} className="flex-1">
+                      {isSubmitting ? <Spinner className="mr-2" /> : null}
+                      Save Changes
+                    </Button>
+                  </div>
+                </SheetFooter>
+              </form>
+            </SheetContent>
+          </Sheet>
         </Card>
       )}
     </Droppable>
