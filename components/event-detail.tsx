@@ -14,6 +14,7 @@ import { AddItemDialog } from "@/components/add-item-dialog"
 import { AddPackageDialog } from "@/components/add-package-dialog"
 import { AddVolunteerDialog } from "@/components/add-volunteer-dialog"
 import { EditItemSheet } from "@/components/edit-item-sheet"
+import { EditEventSheet } from "@/components/edit-event-sheet"
 import { OutreachEmailSheet } from "@/components/outreach-email-sheet"
 import { DraggablePackageCard } from "@/components/draggable-package-card"
 import { ItemStatusBadge } from "@/components/item-status-badge"
@@ -43,6 +44,7 @@ import {
   MapPin,
   MoreHorizontal,
   Package as PackageIcon,
+  Pencil,
   Phone,
   Trash2,
   UserCircle,
@@ -87,6 +89,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<Item | null>(null)
+  const [editingEvent, setEditingEvent] = useState(false)
   const [outreachItem, setOutreachItem] = useState<Item | null>(null)
   const [isMounted, setIsMounted] = useState(false)
   
@@ -720,7 +723,18 @@ export function EventDetail({ eventId }: EventDetailProps) {
             </Button>
             <div className="flex items-start justify-between">
               <div>
-                <h1 className="text-2xl font-bold">{event.event_name}</h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold">{event.event_name}</h1>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={() => setEditingEvent(true)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    <span className="sr-only">Edit event</span>
+                  </Button>
+                </div>
                 <p className="text-muted-foreground">{event.org_name}</p>
                 {event.mission && (
                   <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -942,6 +956,14 @@ export function EventDetail({ eventId }: EventDetailProps) {
           volunteers={volunteers}
           open={!!outreachItem}
           onOpenChange={(open) => !open && setOutreachItem(null)}
+          onUpdate={() => mutate()}
+        />
+
+        {/* Edit Event Sheet */}
+        <EditEventSheet
+          event={event}
+          open={editingEvent}
+          onOpenChange={setEditingEvent}
           onUpdate={() => mutate()}
         />
       </main>
