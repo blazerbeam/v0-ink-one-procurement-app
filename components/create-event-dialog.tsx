@@ -20,17 +20,26 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
-import type { EventFormData } from "@/lib/types"
+import type { EventFormData, Org } from "@/lib/types"
 
 interface CreateEventDialogProps {
+  orgs?: Org[]
   onEventCreated: () => void
 }
 
-export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
+export function CreateEventDialog({ orgs = [], onEventCreated }: CreateEventDialogProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [selectedOrgId, setSelectedOrgId] = useState<string>("")
   const [formData, setFormData] = useState<EventFormData>({
     org_name: "",
     event_name: "",
@@ -58,6 +67,7 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
       const supabase = createClient()
       
       const { error } = await supabase.from("events").insert({
+        org_id: selectedOrgId || null,
         org_name: formData.org_name,
         event_name: formData.event_name,
         mission: formData.mission || null,
@@ -98,6 +108,7 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
         contact_phone: "",
         website: "",
       })
+      setSelectedOrgId("")
       setOpen(false)
       setProfileOpen(false)
       onEventCreated()
@@ -132,6 +143,24 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="mt-4">
           <FieldGroup>
+            {orgs.length > 0 && (
+              <Field>
+                <FieldLabel htmlFor="org_select">Organization</FieldLabel>
+                <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an organization (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {orgs.map((org) => (
+                      <SelectItem key={org.id} value={org.id}>
+                        {org.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
+
             <Field>
               <FieldLabel htmlFor="org_name">Organization Name *</FieldLabel>
               <Input

@@ -1,5 +1,29 @@
+export interface Org {
+  id: string
+  name: string
+  legal_name: string | null
+  dba_name: string | null
+  address: string | null
+  tax_id: string | null
+  contact_name: string | null
+  contact_email: string | null
+  contact_phone: string | null
+  website: string | null
+  mission: string | null
+  created_at: string
+}
+
+export interface OrgMember {
+  id: string
+  org_id: string
+  user_id: string
+  role: string
+  created_at: string
+}
+
 export interface Event {
   id: string
+  org_id: string | null
   org_name: string
   event_name: string
   mission: string | null
