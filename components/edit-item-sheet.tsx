@@ -154,14 +154,14 @@ export function EditItemSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-md overflow-y-auto">
+      <SheetContent className="sm:max-w-md flex flex-col">
         <SheetHeader>
           <SheetTitle>Edit Item</SheetTitle>
           <SheetDescription>
             Update the item details or reassign to a different package.
           </SheetDescription>
         </SheetHeader>
-        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-6">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="name">Item Name *</FieldLabel>

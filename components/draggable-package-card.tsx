@@ -383,14 +383,14 @@ export function DraggablePackageCard({
 
           {/* Edit Package Sheet */}
           <Sheet open={editSheetOpen} onOpenChange={setEditSheetOpen}>
-            <SheetContent className="sm:max-w-md overflow-y-auto">
+            <SheetContent className="sm:max-w-md flex flex-col">
               <SheetHeader>
                 <SheetTitle>Edit Package</SheetTitle>
                 <SheetDescription>
                   Update the package name, description, and notes.
                 </SheetDescription>
               </SheetHeader>
-              <form onSubmit={handleEditPackage} className="mt-6 space-y-6">
+              <form onSubmit={handleEditPackage} className="flex-1 overflow-y-auto px-6 py-6">
                 <FieldGroup>
                   <Field>
                     <FieldLabel htmlFor={`pkg-name-${pkg.id}`}>Package Name *</FieldLabel>
