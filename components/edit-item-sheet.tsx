@@ -42,7 +42,9 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
-import { Trash2, Plus } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Trash2, Plus, Check, ChevronsUpDown } from "lucide-react"
 
 interface EditItemSheetProps {
   item: Item | null
@@ -69,6 +71,9 @@ export function EditItemSheet({
   const [orgId, setOrgId] = useState<string | null>(null)
   const [loadingBusinesses, setLoadingBusinesses] = useState(false)
   const [loadingContacts, setLoadingContacts] = useState(false)
+  
+  // Popover states for searchable dropdowns
+  const [businessPopoverOpen, setBusinessPopoverOpen] = useState(false)
   
   // Inline dialog states
   const [addBusinessOpen, setAddBusinessOpen] = useState(false)
@@ -217,18 +222,30 @@ export function EditItemSheet({
     }
   }, [contacts, item, formData.contact_id])
 
-  const handleBusinessChange = (value: string) => {
-    if (value === "add_new") {
+  const handleBusinessSelect = (businessId: string) => {
+    if (businessId === "add_new") {
+      setBusinessPopoverOpen(false)
       setAddBusinessOpen(true)
       return
     }
     
-    const selectedBusiness = businesses.find(b => b.id === value)
+    const selectedBusiness = businesses.find(b => b.id === businessId)
     setFormData({
       ...formData,
-      business_id: value,
+      business_id: businessId,
       business_name: selectedBusiness?.name || "",
       contact_id: "none", // Clear contact when business changes
+      contact_name: "",
+    })
+    setBusinessPopoverOpen(false)
+  }
+  
+  const clearBusiness = () => {
+    setFormData({
+      ...formData,
+      business_id: "none",
+      business_name: "",
+      contact_id: "none",
       contact_name: "",
     })
   }
@@ -265,7 +282,14 @@ export function EditItemSheet({
     setIsAddingBusiness(false)
     
     if (!error && data) {
-      setBusinesses([...businesses, data])
+      // Re-fetch businesses to ensure we have fresh data
+      const { data: refreshedBusinesses } = await supabase
+        .from("businesses")
+        .select("*")
+        .eq("org_id", orgId)
+        .order("name", { ascending: true })
+      
+      setBusinesses(refreshedBusinesses || [])
       setFormData({
         ...formData,
         business_id: data.id,
@@ -297,7 +321,14 @@ export function EditItemSheet({
     setIsAddingContact(false)
     
     if (!error && data) {
-      setContacts([...contacts, data])
+      // Re-fetch contacts to ensure we have fresh data
+      const { data: refreshedContacts } = await supabase
+        .from("contacts")
+        .select("*")
+        .eq("business_id", formData.business_id)
+        .order("first_name", { ascending: true })
+      
+      setContacts(refreshedContacts || [])
       setFormData({
         ...formData,
         contact_id: data.id,
@@ -348,8 +379,8 @@ export function EditItemSheet({
     setIsSubmitting(false)
 
     if (!error) {
-      onOpenChange(false)
       onUpdate()
+      onOpenChange(false)
     }
   }
 
@@ -399,29 +430,60 @@ export function EditItemSheet({
               <div className="grid grid-cols-2 gap-4">
                 <Field>
                   <FieldLabel htmlFor="business">Business</FieldLabel>
-                  <Select
-                    value={formData.business_id}
-                    onValueChange={handleBusinessChange}
-                    disabled={loadingBusinesses}
-                  >
-                    <SelectTrigger id="business">
-                      <SelectValue placeholder={loadingBusinesses ? "Loading..." : "Select business"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No Business</SelectItem>
-                      {businesses.map((business) => (
-                        <SelectItem key={business.id} value={business.id}>
-                          {business.name}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value="add_new" className="text-primary">
-                        <span className="flex items-center gap-1">
-                          <Plus className="h-3 w-3" />
-                          Add New Business
-                        </span>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Popover open={businessPopoverOpen} onOpenChange={setBusinessPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="business"
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={businessPopoverOpen}
+                        className="w-full justify-between font-normal"
+                        disabled={loadingBusinesses}
+                      >
+                        {loadingBusinesses 
+                          ? "Loading..." 
+                          : formData.business_id !== "none"
+                            ? businesses.find(b => b.id === formData.business_id)?.name || "Select business"
+                            : "Select business"
+                        }
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[200px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search businesses..." />
+                        <CommandList>
+                          <CommandEmpty>No business found.</CommandEmpty>
+                          <CommandGroup>
+                            {formData.business_id !== "none" && (
+                              <CommandItem onSelect={clearBusiness}>
+                                <span className="text-muted-foreground">Clear selection</span>
+                              </CommandItem>
+                            )}
+                            {businesses.map((business) => (
+                              <CommandItem
+                                key={business.id}
+                                value={business.name}
+                                onSelect={() => handleBusinessSelect(business.id)}
+                              >
+                                <Check
+                                  className={`mr-2 h-4 w-4 ${formData.business_id === business.id ? "opacity-100" : "opacity-0"}`}
+                                />
+                                {business.name}
+                              </CommandItem>
+                            ))}
+                            <CommandItem 
+                              onSelect={() => handleBusinessSelect("add_new")}
+                              className="text-primary"
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Add New Business
+                            </CommandItem>
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </Field>
 
                 <Field>
