@@ -13,30 +13,64 @@ export default function AppPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const checkAuth = async () => {
-      // Check Supabase session first
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
+    const supabase = createClient()
+    let isMounted = true
+
+    // Subscribe to auth state changes (catches async sessions like magic link redirects)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("[v0] AppPage: onAuthStateChange fired:", { event, userEmail: session?.user?.email })
+      
+      if (!isMounted) return
       
       if (session) {
+        console.log("[v0] AppPage: Session found via onAuthStateChange, authorizing...")
+        setIsAuthorized(true)
+        setIsLoading(false)
+      }
+    })
+
+    // Check for existing session on mount
+    const checkInitialAuth = async () => {
+      console.log("[v0] AppPage: Checking initial auth...")
+      
+      const { data: { session }, error } = await supabase.auth.getSession()
+      console.log("[v0] AppPage: getSession result:", { 
+        hasSession: !!session, 
+        userEmail: session?.user?.email,
+        error: error?.message 
+      })
+
+      if (!isMounted) return
+
+      if (session) {
+        console.log("[v0] AppPage: Valid Supabase session found")
         setIsAuthorized(true)
         setIsLoading(false)
         return
       }
-      
-      // Check demo password auth
+
+      // Fallback: Check demo password auth in localStorage
       const demoAuth = localStorage.getItem("demoAuth")
+      console.log("[v0] AppPage: demoAuth localStorage value:", demoAuth)
+      
       if (demoAuth === "true") {
+        console.log("[v0] AppPage: Valid demo auth found")
         setIsAuthorized(true)
         setIsLoading(false)
         return
       }
-      
-      // Not authorized, redirect to demo
+
+      console.log("[v0] AppPage: No valid auth found, redirecting to /demo")
       router.push("/demo")
     }
-    
-    checkAuth()
+
+    checkInitialAuth()
+
+    // Cleanup: unsubscribe from auth state changes on unmount
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
+    }
   }, [router])
 
   if (isLoading || !isAuthorized) {
