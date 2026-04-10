@@ -13,58 +13,64 @@ export default function AppPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const supabase = createClient()
+    const supabase = createClient()
+    let isMounted = true
+
+    // Subscribe to auth state changes (catches async sessions like magic link redirects)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("[v0] AppPage: onAuthStateChange fired:", { event, userEmail: session?.user?.email })
       
-      console.log("[v0] AppPage: Starting auth check...")
-      console.log("[v0] AppPage: Current URL hash:", window.location.hash)
+      if (!isMounted) return
       
-      // Listen for auth state changes (handles magic link callback)
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        console.log("[v0] AppPage: Auth state changed:", event, session?.user?.email)
-        if (event === 'SIGNED_IN' && session) {
-          console.log("[v0] AppPage: User signed in via auth state change")
-          setIsAuthorized(true)
-          setIsLoading(false)
-        }
-      })
+      if (session) {
+        console.log("[v0] AppPage: Session found via onAuthStateChange, authorizing...")
+        setIsAuthorized(true)
+        setIsLoading(false)
+      }
+    })
+
+    // Check for existing session on mount
+    const checkInitialAuth = async () => {
+      console.log("[v0] AppPage: Checking initial auth...")
       
-      // Check existing Supabase session
       const { data: { session }, error } = await supabase.auth.getSession()
       console.log("[v0] AppPage: getSession result:", { 
         hasSession: !!session, 
         userEmail: session?.user?.email,
         error: error?.message 
       })
-      
+
+      if (!isMounted) return
+
       if (session) {
-        console.log("[v0] AppPage: Found valid Supabase session")
+        console.log("[v0] AppPage: Valid Supabase session found")
         setIsAuthorized(true)
         setIsLoading(false)
         return
       }
-      
-      // Check demo password auth
+
+      // Fallback: Check demo password auth in localStorage
       const demoAuth = localStorage.getItem("demoAuth")
       console.log("[v0] AppPage: demoAuth localStorage value:", demoAuth)
+      
       if (demoAuth === "true") {
-        console.log("[v0] AppPage: Found valid demo auth")
+        console.log("[v0] AppPage: Valid demo auth found")
         setIsAuthorized(true)
         setIsLoading(false)
         return
       }
-      
+
       console.log("[v0] AppPage: No valid auth found, redirecting to /demo")
-      // Not authorized, redirect to demo
       router.push("/demo")
-      
-      // Cleanup subscription on unmount
-      return () => {
-        subscription.unsubscribe()
-      }
     }
-    
-    checkAuth()
+
+    checkInitialAuth()
+
+    // Cleanup: unsubscribe from auth state changes on unmount
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
+    }
   }, [router])
 
   if (isLoading || !isAuthorized) {
