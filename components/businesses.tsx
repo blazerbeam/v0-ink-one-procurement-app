@@ -554,7 +554,7 @@ export function Businesses({ orgId }: BusinessesProps) {
                 <FieldLabel htmlFor="business-website">Website</FieldLabel>
                 <Input
                   id="business-website"
-                  type="url"
+                  type="text"
                   value={businessForm.website}
                   onChange={(e) => setBusinessForm({ ...businessForm, website: e.target.value })}
                   placeholder="https://www.example.com"
