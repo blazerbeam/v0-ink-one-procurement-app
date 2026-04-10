@@ -412,10 +412,10 @@ export function Dashboard() {
                 <FieldLabel htmlFor="org-website">Website</FieldLabel>
                 <Input
                   id="org-website"
-                  type="url"
+                  type="text"
                   value={orgForm.website}
                   onChange={(e) => setOrgForm({ ...orgForm, website: e.target.value })}
-                  placeholder="https://www.organization.org"
+                  placeholder="www.organization.org"
                 />
               </Field>
 
