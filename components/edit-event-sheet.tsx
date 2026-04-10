@@ -88,14 +88,14 @@ export function EditEventSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-md overflow-y-auto">
+      <SheetContent className="sm:max-w-md flex flex-col">
         <SheetHeader>
           <SheetTitle>Edit Event</SheetTitle>
           <SheetDescription>
             Update the event details below.
           </SheetDescription>
         </SheetHeader>
-        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-6">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="event_name">Event Name *</FieldLabel>

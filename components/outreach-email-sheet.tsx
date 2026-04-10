@@ -295,8 +295,8 @@ export function OutreachEmailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[480px] sm:max-w-[480px] overflow-y-auto">
-        <SheetHeader className="pb-4 border-b">
+      <SheetContent className="w-[480px] sm:max-w-[480px] flex flex-col">
+        <SheetHeader className="border-b">
           <SheetTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5" />
             Outreach Email
@@ -307,7 +307,7 @@ export function OutreachEmailSheet({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="space-y-6 py-6">
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="text-sm text-muted-foreground">Loading...</div>

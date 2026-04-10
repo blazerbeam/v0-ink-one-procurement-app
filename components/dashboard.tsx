@@ -301,7 +301,7 @@ export function Dashboard() {
 
       {/* Create/Edit Org Sheet */}
       <Sheet open={orgSheetOpen} onOpenChange={setOrgSheetOpen}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
+        <SheetContent className="sm:max-w-lg flex flex-col">
           <SheetHeader>
             <SheetTitle>{editingOrg ? "Edit Organization" : "Create Organization"}</SheetTitle>
             <SheetDescription>
@@ -310,7 +310,7 @@ export function Dashboard() {
                 : "Add a new organization to manage events under."}
             </SheetDescription>
           </SheetHeader>
-          <form onSubmit={handleOrgSubmit} className="mt-6 space-y-6">
+          <form onSubmit={handleOrgSubmit} className="flex-1 overflow-y-auto px-6 py-6">
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="org-name">Organization Name *</FieldLabel>
