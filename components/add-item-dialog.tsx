@@ -85,9 +85,34 @@ export function AddItemDialog({
     notes: "",
   })
 
-  // Fetch org_id from event when dialog opens
+  // Reset form and fetch org_id when dialog opens
   useEffect(() => {
     if (open && eventId) {
+      // Reset form first
+      setFormData({
+        name: "",
+        description: "",
+        business_id: "none",
+        business_name: "",
+        contact_id: "none",
+        contact_name: "",
+        estimated_value: "",
+        status: "needed",
+        owner_id: "",
+        package_id: defaultPackageId || "",
+        notes: "",
+      })
+      setContacts([])
+      setBusinesses([])
+      setNewBusinessName("")
+      setNewBusinessCategory("")
+      setNewContactFirstName("")
+      setNewContactLastName("")
+      setAddBusinessOpen(false)
+      setAddContactOpen(false)
+      setBusinessPopoverOpen(false)
+      
+      // Then fetch org
       const fetchOrgId = async () => {
         const supabase = createClient()
         const { data } = await supabase
@@ -102,7 +127,7 @@ export function AddItemDialog({
       }
       fetchOrgId()
     }
-  }, [open, eventId])
+  }, [open, eventId, defaultPackageId])
 
   // Fetch businesses when org_id is available
   useEffect(() => {
@@ -260,36 +285,7 @@ export function AddItemDialog({
     }
   }
 
-  // Reset form when dialog opens to guarantee clean state
   const handleOpenChange = (newOpen: boolean) => {
-    if (newOpen) {
-      // Reset all form fields to empty defaults when opening
-      setFormData({
-        name: "",
-        description: "",
-        business_id: "none",
-        business_name: "",
-        contact_id: "none",
-        contact_name: "",
-        estimated_value: "",
-        status: "needed",
-        owner_id: "",
-        package_id: defaultPackageId || "",
-        notes: "",
-      })
-      // Reset related state
-      setContacts([])
-      setBusinesses([])
-      setOrgId(null)
-      // Reset inline dialog states
-      setNewBusinessName("")
-      setNewBusinessCategory("")
-      setNewContactFirstName("")
-      setNewContactLastName("")
-      setAddBusinessOpen(false)
-      setAddContactOpen(false)
-      setBusinessPopoverOpen(false)
-    }
     setOpen(newOpen)
   }
 
