@@ -5,15 +5,12 @@ import useSWR from "swr"
 import {
   Building2,
   Check,
-  ChevronDown,
   ChevronRight,
   Copy,
-  History,
   Mail,
   Pencil,
   Plus,
   RefreshCw,
-  RotateCw,
   Search,
   User,
 } from "lucide-react"
@@ -66,11 +63,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
 import { useToast } from "@/hooks/use-toast"
 import type { Business, Contact, Event, Item, BusinessOutreach, BusinessOutreachStatus } from "@/lib/types"
 
@@ -108,6 +100,8 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedBusiness, setSelectedBusiness] = useState<OutreachBusiness | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [historySheetOpen, setHistorySheetOpen] = useState(false)
+  const [historyBusiness, setHistoryBusiness] = useState<OutreachBusiness | null>(null)
   const [addBusinessOpen, setAddBusinessOpen] = useState(false)
   const [preSelectItemIdForSheet, setPreSelectItemIdForSheet] = useState<string | null>(null)
 
@@ -259,6 +253,12 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
     setSelectedBusiness(business)
     setPreSelectItemIdForSheet(preSelectItemId || null)
     setSheetOpen(true)
+  }
+
+  const handleOpenHistorySheet = (e: React.MouseEvent, business: OutreachBusiness) => {
+    e.stopPropagation()
+    setHistoryBusiness(business)
+    setHistorySheetOpen(true)
   }
 
   const handleAddBusiness = async (businessId: string) => {
@@ -461,8 +461,6 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
           {filteredBusinesses.map(({ business, items: businessItems, outreach, contacts, outreachHistory }) => {
             const hasGenerated = hasGeneratedEmails(outreach)
             const hasDrafts = hasSavedDrafts(outreach)
-            const roundNumber = outreach?.round_number || 1
-            const hasMultipleRounds = (outreachHistory?.length || 0) > 1
             
             return (
             <Card
@@ -513,14 +511,7 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="flex flex-col items-end gap-1">
-                    <div className="flex items-center gap-1.5">
-                      {roundNumber > 1 && (
-                        <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 bg-purple-50 text-purple-700 border-purple-200">
-                          Round {roundNumber}
-                        </Badge>
-                      )}
-                      {getStatusBadge(outreach)}
-                    </div>
+                    {getStatusBadge(outreach)}
                     {outreach?.last_contacted_at && (
                       <span className="text-xs text-muted-foreground">
                         {formatDate(outreach.last_contacted_at)}
@@ -531,7 +522,14 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
                     <Mail className="mr-2 h-4 w-4" />
                     Generate Email
                   </Button>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8"
+                    onClick={(e) => handleOpenHistorySheet(e, { business, items: businessItems, outreach, contacts, outreachHistory })}
+                  >
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </Button>
                 </div>
               </div>
             </Card>
@@ -554,6 +552,29 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
         onUpdate={() => mutate()}
         preSelectItemId={preSelectItemIdForSheet}
       />
+
+      {/* History Sheet (Coming Soon) */}
+      <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
+        <SheetContent className="w-[520px] sm:max-w-[520px] flex flex-col">
+          <SheetHeader className="border-b pb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              {historyBusiness?.business.name} - History
+            </SheetTitle>
+            <SheetDescription>
+              View outreach history for this business
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center space-y-2">
+              <p className="text-lg font-medium text-muted-foreground">Coming soon</p>
+              <p className="text-sm text-muted-foreground">
+                Outreach history will be available here.
+              </p>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
@@ -579,11 +600,6 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
   const [copied, setCopied] = useState(false)
   const [draftSaved, setDraftSaved] = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
-  const [showNewRoundConfirm, setShowNewRoundConfirm] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
-  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
-  const [historyItems, setHistoryItems] = useState<Map<string, string[]>>(new Map()) // outreach_id -> item_ids
-  const [priorRoundItems, setPriorRoundItems] = useState<Map<string, number[]>>(new Map()) // item_id -> round_numbers
   
   // Track original content to detect unsaved changes
   const [originalSubject, setOriginalSubject] = useState("")
@@ -617,54 +633,6 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
   const [editedSubject, setEditedSubject] = useState("")
   const [editedBody, setEditedBody] = useState("")
 
-  // Load items included in prior rounds for this business
-  useEffect(() => {
-    if (business?.outreachHistory && business.outreachHistory.length > 0) {
-      const loadPriorRoundItems = async () => {
-        const supabase = createClient()
-        const outreachIds = business.outreachHistory!.map(o => o.id)
-        
-        const { data } = await supabase
-          .from("business_outreach_items")
-          .select("outreach_id, item_id")
-          .in("outreach_id", outreachIds)
-        
-        if (data) {
-          // Build map of outreach_id -> item_ids for history display
-          const historyItemsMap = new Map<string, string[]>()
-          // Build map of item_id -> round_numbers for item indicators
-          const itemRoundsMap = new Map<string, number[]>()
-          
-          data.forEach(row => {
-            // Update historyItemsMap
-            if (!historyItemsMap.has(row.outreach_id)) {
-              historyItemsMap.set(row.outreach_id, [])
-            }
-            historyItemsMap.get(row.outreach_id)!.push(row.item_id)
-            
-            // Update itemRoundsMap with round numbers from prior (non-latest) rounds
-            const outreach = business.outreachHistory!.find(o => o.id === row.outreach_id)
-            if (outreach && !outreach.is_latest) {
-              if (!itemRoundsMap.has(row.item_id)) {
-                itemRoundsMap.set(row.item_id, [])
-              }
-              if (!itemRoundsMap.get(row.item_id)!.includes(outreach.round_number)) {
-                itemRoundsMap.get(row.item_id)!.push(outreach.round_number)
-              }
-            }
-          })
-          
-          setHistoryItems(historyItemsMap)
-          setPriorRoundItems(itemRoundsMap)
-        }
-      }
-      loadPriorRoundItems()
-    } else {
-      setHistoryItems(new Map())
-      setPriorRoundItems(new Map())
-    }
-  }, [business?.outreachHistory])
-
   // Reset state when business changes
   useEffect(() => {
     if (business) {
@@ -672,31 +640,15 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
       setSelectedContactId(business.outreach?.contact_id || business.contacts[0]?.id || null)
       setStatus(business.outreach?.status || "not_contacted")
       
-      // Handle item selection based on context
-      if (preSelectItemId && business.items.some(i => i.id === preSelectItemId)) {
-        // Opened from individual item - pre-select only that item
+      // Handle item selection - only items with status "needed" are selectable
+      const neededItems = business.items.filter(i => i.status === "needed")
+      
+      if (preSelectItemId && neededItems.some(i => i.id === preSelectItemId)) {
+        // Opened from individual item - pre-select only that item if it's needed
         setSelectedItemIds(new Set([preSelectItemId]))
-      } else if (business.outreach?.id) {
-        // Load selected items from business_outreach_items if outreach exists
-        const loadSelectedItems = async () => {
-          const supabase = createClient()
-          const { data } = await supabase
-            .from("business_outreach_items")
-            .select("item_id")
-            .eq("outreach_id", business.outreach!.id)
-          
-          if (data && data.length > 0) {
-            // Use previously selected items
-            setSelectedItemIds(new Set(data.map(d => d.item_id)))
-          } else {
-            // Default: select all items for this business
-            setSelectedItemIds(new Set(business.items.map(i => i.id)))
-          }
-        }
-        loadSelectedItems()
       } else {
-        // No outreach record yet - default to all items selected
-        setSelectedItemIds(new Set(business.items.map(i => i.id)))
+        // Default: select all needed items
+        setSelectedItemIds(new Set(neededItems.map(i => i.id)))
       }
       
       // Load saved emails if they exist
@@ -1061,50 +1013,6 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-  
-  const handleStartNewRound = async () => {
-    if (!business || !business.outreach) return
-    
-    const supabase = createClient()
-    const currentRound = business.outreach.round_number || 1
-    
-    // Mark current outreach as not latest
-    await supabase
-      .from("business_outreach")
-      .update({ is_latest: false })
-      .eq("id", business.outreach.id)
-    
-    // Create new outreach record for the new round
-    await supabase.from("business_outreach").insert({
-      org_id: event.org_id,
-      event_id: event.id,
-      business_id: business.business.id,
-      contact_id: selectedContactId,
-      status: "not_contacted",
-      round_number: currentRound + 1,
-      is_latest: true,
-    })
-    
-    // Reset local state
-    setEmails(null)
-    setEditedEmails({
-      professional: null,
-      friendly: null,
-      enthusiastic: null,
-      parent: null,
-    })
-    setStatus("not_contacted")
-    setEditedSubject("")
-    setEditedBody("")
-    setShowNewRoundConfirm(false)
-    
-    toast({
-      title: "New round started",
-      description: `Starting Round ${currentRound + 1} outreach.`,
-    })
-    
-    onUpdate()
-  }
 
   // Sync working content when tone changes - load edited version if exists, otherwise generated
   useEffect(() => {
@@ -1139,87 +1047,112 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
     }}>
       <SheetContent className="w-[520px] sm:max-w-[520px] flex flex-col">
         <SheetHeader className="border-b pb-4">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              {business.business.name}
-              {business.outreach && business.outreach.round_number > 1 && (
-                <Badge variant="outline" className="ml-2 text-xs px-1.5 py-0 h-5 bg-purple-50 text-purple-700 border-purple-200">
-                  Round {business.outreach.round_number}
-                </Badge>
-              )}
-            </SheetTitle>
-            {business.outreach && emails && (
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setShowNewRoundConfirm(true)}
-                className="shrink-0"
-              >
-                <RotateCw className="mr-2 h-3.5 w-3.5" />
-                New Round
-              </Button>
-            )}
-          </div>
+          <SheetTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5" />
+            {business.business.name}
+          </SheetTitle>
           <SheetDescription>
             {business.business.category && (
               <Badge variant="secondary" className="mr-2">{business.business.category}</Badge>
             )}
-            {business.items.length > 0
-              ? business.items.map(i => i.name).join(", ")
-              : "Open Ask"}
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           {/* Item Selection */}
-          {business.items.length > 0 && (
-            <div className="space-y-3">
+          {business.items.length > 0 && (() => {
+            const neededItems = business.items.filter(i => i.status === "needed")
+            const inProgressItems = business.items.filter(i => i.status !== "needed")
+            const allInProgress = neededItems.length === 0 && inProgressItems.length > 0
+            
+            const getItemStatusBadge = (status: string) => {
+              switch (status) {
+                case "contacted":
+                  return <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">Contacted</Badge>
+                case "confirmed":
+                  return <Badge variant="secondary" className="text-xs bg-teal-100 text-teal-700">Confirmed</Badge>
+                case "received":
+                  return <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">Received</Badge>
+                case "declined":
+                  return <Badge variant="secondary" className="text-xs bg-red-100 text-red-700">Declined</Badge>
+                default:
+                  return null
+              }
+            }
+            
+            return (
+            <div className="space-y-4">
               <Label>Items to include in this ask</Label>
-              <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                {business.items.map(item => {
-                  const itemPriorRounds = priorRoundItems.get(item.id) || []
-                  return (
-                  <div key={item.id} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`item-${item.id}`}
-                      checked={selectedItemIds.has(item.id)}
-                      onCheckedChange={(checked) => {
-                        const newSet = new Set(selectedItemIds)
-                        if (checked) {
-                          newSet.add(item.id)
-                        } else {
-                          newSet.delete(item.id)
-                        }
-                        setSelectedItemIds(newSet)
-                      }}
-                    />
-                    <label
-                      htmlFor={`item-${item.id}`}
-                      className="text-sm font-medium leading-none cursor-pointer flex-1 flex items-center gap-2"
-                    >
-                      <span>{item.name}</span>
-                      {item.estimated_value && (
-                        <span className="text-muted-foreground">
-                          ${item.estimated_value.toLocaleString()}
-                        </span>
-                      )}
-                      {itemPriorRounds.length > 0 && (
-                        <span className="text-xs text-muted-foreground bg-gray-100 px-1.5 py-0.5 rounded">
-                          In Round {itemPriorRounds.sort((a, b) => a - b).join(", ")}
-                        </span>
-                      )}
-                    </label>
+              
+              {/* Needed items - selectable with checkboxes */}
+              {neededItems.length > 0 && (
+                <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
+                  {neededItems.map(item => (
+                    <div key={item.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`item-${item.id}`}
+                        checked={selectedItemIds.has(item.id)}
+                        onCheckedChange={(checked) => {
+                          const newSet = new Set(selectedItemIds)
+                          if (checked) {
+                            newSet.add(item.id)
+                          } else {
+                            newSet.delete(item.id)
+                          }
+                          setSelectedItemIds(newSet)
+                        }}
+                      />
+                      <label
+                        htmlFor={`item-${item.id}`}
+                        className="text-sm font-medium leading-none cursor-pointer flex-1 flex items-center gap-2"
+                      >
+                        <span>{item.name}</span>
+                        {item.estimated_value && (
+                          <span className="text-muted-foreground">
+                            ${item.estimated_value.toLocaleString()}
+                          </span>
+                        )}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* All in progress message */}
+              {allInProgress && (
+                <p className="text-sm text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  All items for this donor are already in progress. You can still generate a follow-up email below.
+                </p>
+              )}
+              
+              {/* In progress items - informational only */}
+              {inProgressItems.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Already in progress</Label>
+                  <div className="space-y-2 p-3 bg-gray-50 rounded-lg">
+                    {inProgressItems.map(item => (
+                      <div key={item.id} className="flex items-center gap-2 text-muted-foreground">
+                        <span className="text-sm">{item.name}</span>
+                        {item.estimated_value && (
+                          <span className="text-sm">
+                            ${item.estimated_value.toLocaleString()}
+                          </span>
+                        )}
+                        {getItemStatusBadge(item.status)}
+                      </div>
+                    ))}
                   </div>
-                )})}
-              </div>
-              {selectedItemIds.size === 0 && (
+                </div>
+              )}
+              
+              {/* No items selected warning - only show if there are selectable items */}
+              {neededItems.length > 0 && selectedItemIds.size === 0 && (
                 <p className="text-xs text-amber-600">
                   No items selected. The email will be a general support request.
                 </p>
               )}
             </div>
-          )}
+          )})()}
 
           {/* Contact Selector */}
           {business.contacts.length > 0 && (
@@ -1370,139 +1303,6 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
               </Button>
             </div>
           )}
-          
-          {/* Outreach History */}
-          {business.outreachHistory && business.outreachHistory.length > 1 && (
-            <Collapsible open={historyOpen} onOpenChange={setHistoryOpen} className="pt-4 border-t">
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="w-full justify-between">
-                  <span className="flex items-center gap-2">
-                    <History className="h-4 w-4" />
-                    Outreach History ({business.outreachHistory.length} rounds)
-                  </span>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${historyOpen ? "rotate-180" : ""}`} />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-3 pt-2">
-                {business.outreachHistory
-                  .filter(o => !o.is_latest)
-                  .sort((a, b) => b.round_number - a.round_number)
-                  .map(outreach => {
-                    const isExpanded = expandedHistoryId === outreach.id
-                    const itemIds = historyItems.get(outreach.id) || []
-                    const includedItems = business.items.filter(i => itemIds.includes(i.id))
-                    
-                    // Get email content for display
-                    const o = outreach as BusinessOutreach & {
-                      generated_subject_professional?: string | null
-                      generated_body_professional?: string | null
-                      generated_subject_friendly?: string | null
-                      generated_body_friendly?: string | null
-                      generated_subject_enthusiastic?: string | null
-                      generated_body_enthusiastic?: string | null
-                      generated_subject_parent?: string | null
-                      generated_body_parent?: string | null
-                    }
-                    
-                    // Find first available tone with content
-                    const availableEmail = o.generated_body_professional 
-                      ? { tone: "Professional", subject: o.generated_subject_professional || "", body: o.generated_body_professional }
-                      : o.generated_body_friendly
-                      ? { tone: "Friendly", subject: o.generated_subject_friendly || "", body: o.generated_body_friendly }
-                      : o.generated_body_enthusiastic
-                      ? { tone: "Enthusiastic", subject: o.generated_subject_enthusiastic || "", body: o.generated_body_enthusiastic }
-                      : o.generated_body_parent
-                      ? { tone: "Parent-to-Parent", subject: o.generated_subject_parent || "", body: o.generated_body_parent }
-                      : null
-                    
-                    return (
-                    <Card key={outreach.id} className="overflow-hidden">
-                      <button
-                        onClick={() => setExpandedHistoryId(isExpanded ? null : outreach.id)}
-                        className="w-full p-3 text-left hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs px-1.5 py-0 bg-muted">
-                              Round {outreach.round_number}
-                            </Badge>
-                            <Badge 
-                              variant="secondary" 
-                              className={`text-xs ${
-                                outreach.status === "confirmed" ? "bg-teal-100 text-teal-700" :
-                                outreach.status === "declined" ? "bg-red-100 text-red-700" :
-                                outreach.status === "contacted" ? "bg-blue-100 text-blue-700" :
-                                "bg-gray-100 text-gray-700"
-                              }`}
-                            >
-                              {outreach.status === "not_contacted" ? "Not Contacted" :
-                               outreach.status.charAt(0).toUpperCase() + outreach.status.slice(1)}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">
-                              {outreach.last_contacted_at
-                                ? new Date(outreach.last_contacted_at).toLocaleDateString("en-US", {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                  })
-                                : new Date(outreach.created_at).toLocaleDateString("en-US", {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                  })}
-                            </span>
-                            <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                          </div>
-                        </div>
-                        
-                        {/* Items included tags */}
-                        {includedItems.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {includedItems.map(item => (
-                              <Badge key={item.id} variant="outline" className="text-xs bg-muted/50">
-                                {item.name}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </button>
-                      
-                      {/* Expanded email content */}
-                      {isExpanded && availableEmail && (
-                        <div className="border-t bg-gray-50 p-4 space-y-3">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">{availableEmail.tone}</Badge>
-                            <span className="text-xs text-muted-foreground">Read only</span>
-                          </div>
-                          <div className="space-y-2">
-                            <div>
-                              <Label className="text-xs text-muted-foreground">Subject</Label>
-                              <div className="text-sm bg-white border rounded px-3 py-2 text-muted-foreground">
-                                {availableEmail.subject}
-                              </div>
-                            </div>
-                            <div>
-                              <Label className="text-xs text-muted-foreground">Body</Label>
-                              <div className="text-sm bg-white border rounded px-3 py-2 text-muted-foreground whitespace-pre-wrap max-h-[200px] overflow-y-auto">
-                                {availableEmail.body}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {isExpanded && !availableEmail && (
-                        <div className="border-t bg-gray-50 p-4 text-center text-sm text-muted-foreground">
-                          No email was generated for this round.
-                        </div>
-                      )}
-                    </Card>
-                  )})}
-              </CollapsibleContent>
-            </Collapsible>
-          )}
         </div>
       </SheetContent>
     </Sheet>
@@ -1519,23 +1319,6 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction onClick={handleConfirmClose}>
             Close Anyway
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-    
-    <AlertDialog open={showNewRoundConfirm} onOpenChange={setShowNewRoundConfirm}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Start a new outreach round?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will archive the current outreach (Round {business?.outreach?.round_number || 1}) and start a fresh Round {(business?.outreach?.round_number || 1) + 1}. You&apos;ll need to generate new emails for this round.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleStartNewRound}>
-            Start New Round
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
