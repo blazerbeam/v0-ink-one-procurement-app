@@ -581,6 +581,9 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [showNewRoundConfirm, setShowNewRoundConfirm] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
+  const [historyItems, setHistoryItems] = useState<Map<string, string[]>>(new Map()) // outreach_id -> item_ids
+  const [priorRoundItems, setPriorRoundItems] = useState<Map<string, number[]>>(new Map()) // item_id -> round_numbers
   
   // Track original content to detect unsaved changes
   const [originalSubject, setOriginalSubject] = useState("")
@@ -613,6 +616,54 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
   // Current working content (what's shown in the form)
   const [editedSubject, setEditedSubject] = useState("")
   const [editedBody, setEditedBody] = useState("")
+
+  // Load items included in prior rounds for this business
+  useEffect(() => {
+    if (business?.outreachHistory && business.outreachHistory.length > 0) {
+      const loadPriorRoundItems = async () => {
+        const supabase = createClient()
+        const outreachIds = business.outreachHistory!.map(o => o.id)
+        
+        const { data } = await supabase
+          .from("business_outreach_items")
+          .select("outreach_id, item_id")
+          .in("outreach_id", outreachIds)
+        
+        if (data) {
+          // Build map of outreach_id -> item_ids for history display
+          const historyItemsMap = new Map<string, string[]>()
+          // Build map of item_id -> round_numbers for item indicators
+          const itemRoundsMap = new Map<string, number[]>()
+          
+          data.forEach(row => {
+            // Update historyItemsMap
+            if (!historyItemsMap.has(row.outreach_id)) {
+              historyItemsMap.set(row.outreach_id, [])
+            }
+            historyItemsMap.get(row.outreach_id)!.push(row.item_id)
+            
+            // Update itemRoundsMap with round numbers from prior (non-latest) rounds
+            const outreach = business.outreachHistory!.find(o => o.id === row.outreach_id)
+            if (outreach && !outreach.is_latest) {
+              if (!itemRoundsMap.has(row.item_id)) {
+                itemRoundsMap.set(row.item_id, [])
+              }
+              if (!itemRoundsMap.get(row.item_id)!.includes(outreach.round_number)) {
+                itemRoundsMap.get(row.item_id)!.push(outreach.round_number)
+              }
+            }
+          })
+          
+          setHistoryItems(historyItemsMap)
+          setPriorRoundItems(itemRoundsMap)
+        }
+      }
+      loadPriorRoundItems()
+    } else {
+      setHistoryItems(new Map())
+      setPriorRoundItems(new Map())
+    }
+  }, [business?.outreachHistory])
 
   // Reset state when business changes
   useEffect(() => {
@@ -1126,7 +1177,9 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
             <div className="space-y-3">
               <Label>Items to include in this ask</Label>
               <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                {business.items.map(item => (
+                {business.items.map(item => {
+                  const itemPriorRounds = priorRoundItems.get(item.id) || []
+                  return (
                   <div key={item.id} className="flex items-center gap-2">
                     <Checkbox
                       id={`item-${item.id}`}
@@ -1143,17 +1196,22 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
                     />
                     <label
                       htmlFor={`item-${item.id}`}
-                      className="text-sm font-medium leading-none cursor-pointer flex-1"
+                      className="text-sm font-medium leading-none cursor-pointer flex-1 flex items-center gap-2"
                     >
-                      {item.name}
+                      <span>{item.name}</span>
                       {item.estimated_value && (
-                        <span className="text-muted-foreground ml-2">
+                        <span className="text-muted-foreground">
                           ${item.estimated_value.toLocaleString()}
+                        </span>
+                      )}
+                      {itemPriorRounds.length > 0 && (
+                        <span className="text-xs text-muted-foreground bg-gray-100 px-1.5 py-0.5 rounded">
+                          In Round {itemPriorRounds.sort((a, b) => a - b).join(", ")}
                         </span>
                       )}
                     </label>
                   </div>
-                ))}
+                )})}
               </div>
               {selectedItemIds.size === 0 && (
                 <p className="text-xs text-amber-600">
@@ -1325,49 +1383,123 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
                   <ChevronDown className={`h-4 w-4 transition-transform ${historyOpen ? "rotate-180" : ""}`} />
                 </Button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-2 pt-2">
+              <CollapsibleContent className="space-y-3 pt-2">
                 {business.outreachHistory
                   .filter(o => !o.is_latest)
                   .sort((a, b) => b.round_number - a.round_number)
-                  .map(outreach => (
-                    <Card key={outreach.id} className="p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <Badge variant="outline" className="text-xs px-1.5 py-0 bg-muted">
-                          Round {outreach.round_number}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {outreach.last_contacted_at
-                            ? new Date(outreach.last_contacted_at).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })
-                            : new Date(outreach.created_at).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge 
-                          variant="secondary" 
-                          className={`text-xs ${
-                            outreach.status === "confirmed" ? "bg-teal-100 text-teal-700" :
-                            outreach.status === "declined" ? "bg-red-100 text-red-700" :
-                            outreach.status === "contacted" ? "bg-blue-100 text-blue-700" :
-                            "bg-gray-100 text-gray-700"
-                          }`}
-                        >
-                          {outreach.status === "not_contacted" ? "Not Contacted" :
-                           outreach.status.charAt(0).toUpperCase() + outreach.status.slice(1)}
-                        </Badge>
-                        {outreach.generated_body_professional && (
-                          <span className="text-xs text-muted-foreground">Email generated</span>
+                  .map(outreach => {
+                    const isExpanded = expandedHistoryId === outreach.id
+                    const itemIds = historyItems.get(outreach.id) || []
+                    const includedItems = business.items.filter(i => itemIds.includes(i.id))
+                    
+                    // Get email content for display
+                    const o = outreach as BusinessOutreach & {
+                      generated_subject_professional?: string | null
+                      generated_body_professional?: string | null
+                      generated_subject_friendly?: string | null
+                      generated_body_friendly?: string | null
+                      generated_subject_enthusiastic?: string | null
+                      generated_body_enthusiastic?: string | null
+                      generated_subject_parent?: string | null
+                      generated_body_parent?: string | null
+                    }
+                    
+                    // Find first available tone with content
+                    const availableEmail = o.generated_body_professional 
+                      ? { tone: "Professional", subject: o.generated_subject_professional || "", body: o.generated_body_professional }
+                      : o.generated_body_friendly
+                      ? { tone: "Friendly", subject: o.generated_subject_friendly || "", body: o.generated_body_friendly }
+                      : o.generated_body_enthusiastic
+                      ? { tone: "Enthusiastic", subject: o.generated_subject_enthusiastic || "", body: o.generated_body_enthusiastic }
+                      : o.generated_body_parent
+                      ? { tone: "Parent-to-Parent", subject: o.generated_subject_parent || "", body: o.generated_body_parent }
+                      : null
+                    
+                    return (
+                    <Card key={outreach.id} className="overflow-hidden">
+                      <button
+                        onClick={() => setExpandedHistoryId(isExpanded ? null : outreach.id)}
+                        className="w-full p-3 text-left hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs px-1.5 py-0 bg-muted">
+                              Round {outreach.round_number}
+                            </Badge>
+                            <Badge 
+                              variant="secondary" 
+                              className={`text-xs ${
+                                outreach.status === "confirmed" ? "bg-teal-100 text-teal-700" :
+                                outreach.status === "declined" ? "bg-red-100 text-red-700" :
+                                outreach.status === "contacted" ? "bg-blue-100 text-blue-700" :
+                                "bg-gray-100 text-gray-700"
+                              }`}
+                            >
+                              {outreach.status === "not_contacted" ? "Not Contacted" :
+                               outreach.status.charAt(0).toUpperCase() + outreach.status.slice(1)}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {outreach.last_contacted_at
+                                ? new Date(outreach.last_contacted_at).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })
+                                : new Date(outreach.created_at).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })}
+                            </span>
+                            <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                          </div>
+                        </div>
+                        
+                        {/* Items included tags */}
+                        {includedItems.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {includedItems.map(item => (
+                              <Badge key={item.id} variant="outline" className="text-xs bg-muted/50">
+                                {item.name}
+                              </Badge>
+                            ))}
+                          </div>
                         )}
-                      </div>
+                      </button>
+                      
+                      {/* Expanded email content */}
+                      {isExpanded && availableEmail && (
+                        <div className="border-t bg-gray-50 p-4 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs">{availableEmail.tone}</Badge>
+                            <span className="text-xs text-muted-foreground">Read only</span>
+                          </div>
+                          <div className="space-y-2">
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Subject</Label>
+                              <div className="text-sm bg-white border rounded px-3 py-2 text-muted-foreground">
+                                {availableEmail.subject}
+                              </div>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Body</Label>
+                              <div className="text-sm bg-white border rounded px-3 py-2 text-muted-foreground whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+                                {availableEmail.body}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {isExpanded && !availableEmail && (
+                        <div className="border-t bg-gray-50 p-4 text-center text-sm text-muted-foreground">
+                          No email was generated for this round.
+                        </div>
+                      )}
                     </Card>
-                  ))}
+                  )})}
               </CollapsibleContent>
             </Collapsible>
           )}
