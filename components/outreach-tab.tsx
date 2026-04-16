@@ -5,12 +5,15 @@ import useSWR from "swr"
 import {
   Building2,
   Check,
+  ChevronDown,
   ChevronRight,
   Copy,
+  History,
   Mail,
   Pencil,
   Plus,
   RefreshCw,
+  RotateCw,
   Search,
   User,
 } from "lucide-react"
@@ -63,6 +66,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { useToast } from "@/hooks/use-toast"
 import type { Business, Contact, Event, Item, BusinessOutreach, BusinessOutreachStatus } from "@/lib/types"
 
@@ -83,6 +91,7 @@ interface OutreachBusiness {
   items: Item[]
   outreach: BusinessOutreach | null
   contacts: Contact[]
+  outreachHistory?: BusinessOutreach[]
 }
 
 const loadingMessages = [
@@ -111,14 +120,30 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
       // Get businesses from items linked to this event
       const businessIdsFromItems = [...new Set(items.filter(i => i.business_id).map(i => i.business_id!))]
 
-      // Get business_outreach records for this event
+      // Get business_outreach records for this event (only the latest round per business)
       const { data: outreachData } = await supabase
         .from("business_outreach")
         .select("*")
         .eq("event_id", eventId)
+        .eq("is_latest", true)
 
       const outreachMap = new Map<string, BusinessOutreach>()
       outreachData?.forEach(o => outreachMap.set(o.business_id, o as BusinessOutreach))
+
+      // Get all outreach records (including history) for businesses with multiple rounds
+      const { data: allOutreachData } = await supabase
+        .from("business_outreach")
+        .select("*")
+        .eq("event_id", eventId)
+        .order("round_number", { ascending: false })
+      
+      const historyMap = new Map<string, BusinessOutreach[]>()
+      allOutreachData?.forEach(o => {
+        if (!historyMap.has(o.business_id)) {
+          historyMap.set(o.business_id, [])
+        }
+        historyMap.get(o.business_id)!.push(o as BusinessOutreach)
+      })
 
       // Get additional business IDs from outreach records (manually added)
       const businessIdsFromOutreach = outreachData?.map(o => o.business_id) || []
@@ -157,6 +182,7 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
           items: items.filter(i => i.business_id === business.id),
           outreach: outreachMap.get(business.id) || null,
           contacts: contactsMap.get(business.id) || [],
+          outreachHistory: historyMap.get(business.id) || [],
         }))
         .sort((a, b) => a.business.name.localeCompare(b.business.name))
 
@@ -244,6 +270,8 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
       event_id: eventId,
       business_id: businessId,
       status: "not_contacted",
+      round_number: 1,
+      is_latest: true,
     })
 
     setAddBusinessOpen(false)
@@ -430,9 +458,11 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredBusinesses.map(({ business, items: businessItems, outreach, contacts }) => {
+          {filteredBusinesses.map(({ business, items: businessItems, outreach, contacts, outreachHistory }) => {
             const hasGenerated = hasGeneratedEmails(outreach)
             const hasDrafts = hasSavedDrafts(outreach)
+            const roundNumber = outreach?.round_number || 1
+            const hasMultipleRounds = (outreachHistory?.length || 0) > 1
             
             return (
             <Card
@@ -440,7 +470,7 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
               className={`p-4 cursor-pointer hover:bg-muted/50 transition-colors relative overflow-hidden ${
                 hasDrafts ? "border-l-4 border-l-green-500" : hasGenerated ? "border-l-4 border-l-blue-500" : ""
               }`}
-              onClick={() => handleOpenSheet({ business, items: businessItems, outreach, contacts })}
+              onClick={() => handleOpenSheet({ business, items: businessItems, outreach, contacts, outreachHistory })}
             >
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
@@ -483,7 +513,14 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="flex flex-col items-end gap-1">
-                    {getStatusBadge(outreach)}
+                    <div className="flex items-center gap-1.5">
+                      {roundNumber > 1 && (
+                        <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 bg-purple-50 text-purple-700 border-purple-200">
+                          Round {roundNumber}
+                        </Badge>
+                      )}
+                      {getStatusBadge(outreach)}
+                    </div>
                     {outreach?.last_contacted_at && (
                       <span className="text-xs text-muted-foreground">
                         {formatDate(outreach.last_contacted_at)}
@@ -542,6 +579,8 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
   const [copied, setCopied] = useState(false)
   const [draftSaved, setDraftSaved] = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const [showNewRoundConfirm, setShowNewRoundConfirm] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   
   // Track original content to detect unsaved changes
   const [originalSubject, setOriginalSubject] = useState("")
@@ -780,32 +819,54 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
 
     const supabase = createClient()
     
-    // Upsert business_outreach and get the outreach_id
-    const { data: outreachData } = await supabase.from("business_outreach").upsert({
-      org_id: event.org_id,
-      event_id: event.id,
-      business_id: business.business.id,
-      contact_id: selectedContactId,
-      status,
-      generated_subject_professional: emailsToSave.professional.subject,
-      generated_body_professional: emailsToSave.professional.body,
-      generated_subject_friendly: emailsToSave.friendly.subject,
-      generated_body_friendly: emailsToSave.friendly.body,
-      generated_subject_enthusiastic: emailsToSave.enthusiastic.subject,
-      generated_body_enthusiastic: emailsToSave.enthusiastic.body,
-      generated_subject_parent: emailsToSave.parent.subject,
-      generated_body_parent: emailsToSave.parent.body,
-    }, { onConflict: "event_id,business_id" }).select("id").single()
+    let outreachId = business.outreach?.id
+    
+    if (outreachId) {
+      // Update existing outreach record
+      await supabase.from("business_outreach").update({
+        contact_id: selectedContactId,
+        status,
+        generated_subject_professional: emailsToSave.professional.subject,
+        generated_body_professional: emailsToSave.professional.body,
+        generated_subject_friendly: emailsToSave.friendly.subject,
+        generated_body_friendly: emailsToSave.friendly.body,
+        generated_subject_enthusiastic: emailsToSave.enthusiastic.subject,
+        generated_body_enthusiastic: emailsToSave.enthusiastic.body,
+        generated_subject_parent: emailsToSave.parent.subject,
+        generated_body_parent: emailsToSave.parent.body,
+      }).eq("id", outreachId)
+    } else {
+      // Create new outreach record
+      const { data: outreachData } = await supabase.from("business_outreach").insert({
+        org_id: event.org_id,
+        event_id: event.id,
+        business_id: business.business.id,
+        contact_id: selectedContactId,
+        status,
+        round_number: 1,
+        is_latest: true,
+        generated_subject_professional: emailsToSave.professional.subject,
+        generated_body_professional: emailsToSave.professional.body,
+        generated_subject_friendly: emailsToSave.friendly.subject,
+        generated_body_friendly: emailsToSave.friendly.body,
+        generated_subject_enthusiastic: emailsToSave.enthusiastic.subject,
+        generated_body_enthusiastic: emailsToSave.enthusiastic.body,
+        generated_subject_parent: emailsToSave.parent.subject,
+        generated_body_parent: emailsToSave.parent.body,
+      }).select("id").single()
+      
+      outreachId = outreachData?.id
+    }
 
     // Save selected items to business_outreach_items
-    if (outreachData?.id) {
+    if (outreachId) {
       // Delete existing items for this outreach
-      await supabase.from("business_outreach_items").delete().eq("outreach_id", outreachData.id)
+      await supabase.from("business_outreach_items").delete().eq("outreach_id", outreachId)
       
       // Insert new selected items
       if (selectedItemIds.size > 0) {
         const itemsToInsert = Array.from(selectedItemIds).map(itemId => ({
-          outreach_id: outreachData.id,
+          outreach_id: outreachId,
           item_id: itemId,
         }))
         await supabase.from("business_outreach_items").insert(itemsToInsert)
@@ -822,9 +883,6 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
     
     // Build update object with only the current tone's edited columns
     const updateData: Record<string, unknown> = {
-      org_id: event.org_id,
-      event_id: event.id,
-      business_id: business.business.id,
       contact_id: selectedContactId,
       status,
       edited_at: new Date().toISOString(),
@@ -834,7 +892,20 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
     updateData[`edited_subject_${tone}`] = editedSubject
     updateData[`edited_body_${tone}`] = editedBody
     
-    await supabase.from("business_outreach").upsert(updateData, { onConflict: "event_id,business_id" })
+    if (business.outreach?.id) {
+      // Update existing record
+      await supabase.from("business_outreach").update(updateData).eq("id", business.outreach.id)
+    } else {
+      // Create new record
+      await supabase.from("business_outreach").insert({
+        ...updateData,
+        org_id: event.org_id,
+        event_id: event.id,
+        business_id: business.business.id,
+        round_number: 1,
+        is_latest: true,
+      })
+    }
 
     // Update local state for per-tone edited emails
     setEditedEmails(prev => ({
@@ -859,7 +930,7 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
   }
 
   const handleRevertToGenerated = async () => {
-    if (!business || !currentEmail) return
+    if (!business || !currentEmail || !business.outreach?.id) return
     
     // Reset local state to generated version
     setEditedSubject(currentEmail.subject)
@@ -869,15 +940,11 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
     
     // Clear the per-tone edited columns in DB
     const supabase = createClient()
-    const updateData: Record<string, unknown> = {
-      org_id: event.org_id,
-      event_id: event.id,
-      business_id: business.business.id,
-    }
+    const updateData: Record<string, unknown> = {}
     updateData[`edited_subject_${tone}`] = null
     updateData[`edited_body_${tone}`] = null
     
-    await supabase.from("business_outreach").upsert(updateData, { onConflict: "event_id,business_id" })
+    await supabase.from("business_outreach").update(updateData).eq("id", business.outreach.id)
     
     // Update local edited emails state
     setEditedEmails(prev => ({
@@ -894,9 +961,6 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
 
     const supabase = createClient()
     const updateData: Record<string, unknown> = {
-      org_id: event.org_id,
-      event_id: event.id,
-      business_id: business.business.id,
       status: newStatus,
     }
 
@@ -904,7 +968,18 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
       updateData.last_contacted_at = new Date().toISOString()
     }
 
-    await supabase.from("business_outreach").upsert(updateData, { onConflict: "event_id,business_id" })
+    if (business.outreach?.id) {
+      await supabase.from("business_outreach").update(updateData).eq("id", business.outreach.id)
+    } else {
+      await supabase.from("business_outreach").insert({
+        ...updateData,
+        org_id: event.org_id,
+        event_id: event.id,
+        business_id: business.business.id,
+        round_number: 1,
+        is_latest: true,
+      })
+    }
     
     // Map outreach status to item status and update only selected items
     const itemStatusMap: Record<BusinessOutreachStatus, string> = {
@@ -934,6 +1009,50 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
     navigator.clipboard.writeText(`Subject: ${editedSubject}\n\n${editedBody}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+  
+  const handleStartNewRound = async () => {
+    if (!business || !business.outreach) return
+    
+    const supabase = createClient()
+    const currentRound = business.outreach.round_number || 1
+    
+    // Mark current outreach as not latest
+    await supabase
+      .from("business_outreach")
+      .update({ is_latest: false })
+      .eq("id", business.outreach.id)
+    
+    // Create new outreach record for the new round
+    await supabase.from("business_outreach").insert({
+      org_id: event.org_id,
+      event_id: event.id,
+      business_id: business.business.id,
+      contact_id: selectedContactId,
+      status: "not_contacted",
+      round_number: currentRound + 1,
+      is_latest: true,
+    })
+    
+    // Reset local state
+    setEmails(null)
+    setEditedEmails({
+      professional: null,
+      friendly: null,
+      enthusiastic: null,
+      parent: null,
+    })
+    setStatus("not_contacted")
+    setEditedSubject("")
+    setEditedBody("")
+    setShowNewRoundConfirm(false)
+    
+    toast({
+      title: "New round started",
+      description: `Starting Round ${currentRound + 1} outreach.`,
+    })
+    
+    onUpdate()
   }
 
   // Sync working content when tone changes - load edited version if exists, otherwise generated
@@ -969,10 +1088,28 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
     }}>
       <SheetContent className="w-[520px] sm:max-w-[520px] flex flex-col">
         <SheetHeader className="border-b pb-4">
-          <SheetTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5" />
-            {business.business.name}
-          </SheetTitle>
+          <div className="flex items-center justify-between">
+            <SheetTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              {business.business.name}
+              {business.outreach && business.outreach.round_number > 1 && (
+                <Badge variant="outline" className="ml-2 text-xs px-1.5 py-0 h-5 bg-purple-50 text-purple-700 border-purple-200">
+                  Round {business.outreach.round_number}
+                </Badge>
+              )}
+            </SheetTitle>
+            {business.outreach && emails && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowNewRoundConfirm(true)}
+                className="shrink-0"
+              >
+                <RotateCw className="mr-2 h-3.5 w-3.5" />
+                New Round
+              </Button>
+            )}
+          </div>
           <SheetDescription>
             {business.business.category && (
               <Badge variant="secondary" className="mr-2">{business.business.category}</Badge>
@@ -1175,6 +1312,65 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
               </Button>
             </div>
           )}
+          
+          {/* Outreach History */}
+          {business.outreachHistory && business.outreachHistory.length > 1 && (
+            <Collapsible open={historyOpen} onOpenChange={setHistoryOpen} className="pt-4 border-t">
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" className="w-full justify-between">
+                  <span className="flex items-center gap-2">
+                    <History className="h-4 w-4" />
+                    Outreach History ({business.outreachHistory.length} rounds)
+                  </span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${historyOpen ? "rotate-180" : ""}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-2 pt-2">
+                {business.outreachHistory
+                  .filter(o => !o.is_latest)
+                  .sort((a, b) => b.round_number - a.round_number)
+                  .map(outreach => (
+                    <Card key={outreach.id} className="p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <Badge variant="outline" className="text-xs px-1.5 py-0 bg-muted">
+                          Round {outreach.round_number}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {outreach.last_contacted_at
+                            ? new Date(outreach.last_contacted_at).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })
+                            : new Date(outreach.created_at).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge 
+                          variant="secondary" 
+                          className={`text-xs ${
+                            outreach.status === "confirmed" ? "bg-teal-100 text-teal-700" :
+                            outreach.status === "declined" ? "bg-red-100 text-red-700" :
+                            outreach.status === "contacted" ? "bg-blue-100 text-blue-700" :
+                            "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {outreach.status === "not_contacted" ? "Not Contacted" :
+                           outreach.status.charAt(0).toUpperCase() + outreach.status.slice(1)}
+                        </Badge>
+                        {outreach.generated_body_professional && (
+                          <span className="text-xs text-muted-foreground">Email generated</span>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
         </div>
       </SheetContent>
     </Sheet>
@@ -1191,6 +1387,23 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction onClick={handleConfirmClose}>
             Close Anyway
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    
+    <AlertDialog open={showNewRoundConfirm} onOpenChange={setShowNewRoundConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Start a new outreach round?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will archive the current outreach (Round {business?.outreach?.round_number || 1}) and start a fresh Round {(business?.outreach?.round_number || 1) + 1}. You&apos;ll need to generate new emails for this round.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleStartNewRound}>
+            Start New Round
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

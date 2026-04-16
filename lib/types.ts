@@ -219,6 +219,8 @@ export interface BusinessOutreach {
   business_id: string
   contact_id: string | null
   status: BusinessOutreachStatus
+  round_number: number
+  is_latest: boolean
   last_contacted_at: string | null
   generated_subject_professional: string | null
   generated_body_professional: string | null
