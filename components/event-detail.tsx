@@ -118,6 +118,32 @@ export function EventDetail({ eventId }: EventDetailProps) {
     () => fetchEventData(eventId)
   )
 
+  // Real-time subscription for items changes
+  useEffect(() => {
+    const supabase = createClient()
+    
+    const channel = supabase
+      .channel(`items-${eventId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'items',
+          filter: `event_id=eq.${eventId}`,
+        },
+        () => {
+          // Re-fetch data when any item changes
+          mutate()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [eventId, mutate])
+
   const event = data?.event
   const packages = data?.packages || []
   const items = data?.items || []
