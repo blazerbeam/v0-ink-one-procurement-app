@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -69,6 +70,9 @@ interface OutreachTabProps {
   eventId: string
   event: Event
   items: Item[]
+  // When set, opens the sheet directly for the business of this item with only this item pre-selected
+  preSelectedItemId?: string | null
+  onPreSelectClear?: () => void
 }
 
 type OutreachFilter = "all" | "not_contacted" | "contacted" | "needs_follow_up"
@@ -90,12 +94,13 @@ const loadingMessages = [
   "Finalizing all four versions...",
 ]
 
-export function OutreachTab({ eventId, event, items }: OutreachTabProps) {
+export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSelectClear }: OutreachTabProps) {
   const [filter, setFilter] = useState<OutreachFilter>("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedBusiness, setSelectedBusiness] = useState<OutreachBusiness | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [addBusinessOpen, setAddBusinessOpen] = useState(false)
+  const [preSelectItemIdForSheet, setPreSelectItemIdForSheet] = useState<string | null>(null)
 
   // Fetch outreach data
   const { data, isLoading, mutate } = useSWR(
@@ -171,6 +176,21 @@ export function OutreachTab({ eventId, event, items }: OutreachTabProps) {
 
   const businesses = data?.businesses || []
   const allOrgBusinesses = data?.allOrgBusinesses || []
+  
+  // Handle opening from individual item menu
+  useEffect(() => {
+    if (preSelectedItemId && businesses.length > 0) {
+      // Find the business that owns this item
+      const item = items.find(i => i.id === preSelectedItemId)
+      if (item?.business_id) {
+        const businessData = businesses.find(b => b.business.id === item.business_id)
+        if (businessData) {
+          handleOpenSheet(businessData, preSelectedItemId)
+          onPreSelectClear?.()
+        }
+      }
+    }
+  }, [preSelectedItemId, businesses, items])
 
   // Filter businesses
   const sevenDaysAgo = new Date()
@@ -209,8 +229,9 @@ export function OutreachTab({ eventId, event, items }: OutreachTabProps) {
     return new Date(b.outreach.last_contacted_at) < sevenDaysAgo
   }).length
 
-  const handleOpenSheet = (business: OutreachBusiness) => {
+  const handleOpenSheet = (business: OutreachBusiness, preSelectItemId?: string) => {
     setSelectedBusiness(business)
+    setPreSelectItemIdForSheet(preSelectItemId || null)
     setSheetOpen(true)
   }
 
@@ -485,10 +506,16 @@ export function OutreachTab({ eventId, event, items }: OutreachTabProps) {
       {/* Email Generation Sheet */}
       <OutreachSheet
         open={sheetOpen}
-        onOpenChange={setSheetOpen}
+        onOpenChange={(isOpen) => {
+          setSheetOpen(isOpen)
+          if (!isOpen) {
+            setPreSelectItemIdForSheet(null)
+          }
+        }}
         business={selectedBusiness}
         event={event}
         onUpdate={() => mutate()}
+        preSelectItemId={preSelectItemIdForSheet}
       />
     </div>
   )
@@ -501,9 +528,10 @@ interface OutreachSheetProps {
   business: OutreachBusiness | null
   event: Event
   onUpdate: () => void
+  preSelectItemId?: string | null
 }
 
-function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: OutreachSheetProps) {
+function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelectItemId }: OutreachSheetProps) {
   const { toast } = useToast()
   const [tone, setTone] = useState<Tone>("professional")
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null)
@@ -518,6 +546,9 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
   // Track original content to detect unsaved changes
   const [originalSubject, setOriginalSubject] = useState("")
   const [originalBody, setOriginalBody] = useState("")
+  
+  // Item selection state
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set())
 
   // Email content state - generated versions
   const [emails, setEmails] = useState<{
@@ -550,6 +581,33 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
       setTone("professional") // Always default to Professional tone
       setSelectedContactId(business.outreach?.contact_id || business.contacts[0]?.id || null)
       setStatus(business.outreach?.status || "not_contacted")
+      
+      // Handle item selection based on context
+      if (preSelectItemId && business.items.some(i => i.id === preSelectItemId)) {
+        // Opened from individual item - pre-select only that item
+        setSelectedItemIds(new Set([preSelectItemId]))
+      } else if (business.outreach?.id) {
+        // Load selected items from business_outreach_items if outreach exists
+        const loadSelectedItems = async () => {
+          const supabase = createClient()
+          const { data } = await supabase
+            .from("business_outreach_items")
+            .select("item_id")
+            .eq("outreach_id", business.outreach!.id)
+          
+          if (data && data.length > 0) {
+            // Use previously selected items
+            setSelectedItemIds(new Set(data.map(d => d.item_id)))
+          } else {
+            // Default: select all items for this business
+            setSelectedItemIds(new Set(business.items.map(i => i.id)))
+          }
+        }
+        loadSelectedItems()
+      } else {
+        // No outreach record yet - default to all items selected
+        setSelectedItemIds(new Set(business.items.map(i => i.id)))
+      }
       
       // Load saved emails if they exist
       if (business.outreach) {
@@ -673,6 +731,9 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
     setProgress(0)
     setLoadingMessage(loadingMessages[0])
 
+    // Get only the selected items
+    const selectedItems = business.items.filter(i => selectedItemIds.has(i.id))
+
     try {
       const response = await fetch("/api/generate-outreach-email", {
         method: "POST",
@@ -687,7 +748,7 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
           business_name: business.business.name,
           business_category: business.business.category,
           contact_first_name: selectedContact?.first_name || "",
-          items: business.items.map(i => i.name),
+          items: selectedItems.length > 0 ? selectedItems.map(i => i.name) : ["general support"],
         }),
       })
 
@@ -718,7 +779,9 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
     if (!business || !emailsToSave) return
 
     const supabase = createClient()
-    await supabase.from("business_outreach").upsert({
+    
+    // Upsert business_outreach and get the outreach_id
+    const { data: outreachData } = await supabase.from("business_outreach").upsert({
       org_id: event.org_id,
       event_id: event.id,
       business_id: business.business.id,
@@ -732,7 +795,22 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
       generated_body_enthusiastic: emailsToSave.enthusiastic.body,
       generated_subject_parent: emailsToSave.parent.subject,
       generated_body_parent: emailsToSave.parent.body,
-    }, { onConflict: "event_id,business_id" })
+    }, { onConflict: "event_id,business_id" }).select("id").single()
+
+    // Save selected items to business_outreach_items
+    if (outreachData?.id) {
+      // Delete existing items for this outreach
+      await supabase.from("business_outreach_items").delete().eq("outreach_id", outreachData.id)
+      
+      // Insert new selected items
+      if (selectedItemIds.size > 0) {
+        const itemsToInsert = Array.from(selectedItemIds).map(itemId => ({
+          outreach_id: outreachData.id,
+          item_id: itemId,
+        }))
+        await supabase.from("business_outreach_items").insert(itemsToInsert)
+      }
+    }
 
     onUpdate()
   }
@@ -827,6 +905,26 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
     }
 
     await supabase.from("business_outreach").upsert(updateData, { onConflict: "event_id,business_id" })
+    
+    // Map outreach status to item status and update only selected items
+    const itemStatusMap: Record<BusinessOutreachStatus, string> = {
+      not_contacted: "needed",
+      contacted: "contacted",
+      confirmed: "confirmed",
+      declined: "declined",
+    }
+    
+    const newItemStatus = itemStatusMap[newStatus]
+    
+    // Update only the items that are in the selected set
+    if (selectedItemIds.size > 0) {
+      const selectedItemIdsArray = Array.from(selectedItemIds)
+      await supabase
+        .from("items")
+        .update({ status: newItemStatus })
+        .in("id", selectedItemIdsArray)
+    }
+    
     onUpdate()
   }
 
@@ -886,6 +984,48 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+          {/* Item Selection */}
+          {business.items.length > 0 && (
+            <div className="space-y-3">
+              <Label>Items to include in this ask</Label>
+              <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
+                {business.items.map(item => (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`item-${item.id}`}
+                      checked={selectedItemIds.has(item.id)}
+                      onCheckedChange={(checked) => {
+                        const newSet = new Set(selectedItemIds)
+                        if (checked) {
+                          newSet.add(item.id)
+                        } else {
+                          newSet.delete(item.id)
+                        }
+                        setSelectedItemIds(newSet)
+                      }}
+                    />
+                    <label
+                      htmlFor={`item-${item.id}`}
+                      className="text-sm font-medium leading-none cursor-pointer flex-1"
+                    >
+                      {item.name}
+                      {item.estimated_value && (
+                        <span className="text-muted-foreground ml-2">
+                          ${item.estimated_value.toLocaleString()}
+                        </span>
+                      )}
+                    </label>
+                  </div>
+                ))}
+              </div>
+              {selectedItemIds.size === 0 && (
+                <p className="text-xs text-amber-600">
+                  No items selected. The email will be a general support request.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Contact Selector */}
           {business.contacts.length > 0 && (
             <div className="space-y-2">
