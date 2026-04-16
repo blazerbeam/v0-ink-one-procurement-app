@@ -208,3 +208,36 @@ export const STATUS_LABELS: Record<ItemStatus, string> = {
   declined: 'Declined',
   fulfilled: 'Fulfilled'
 }
+
+// Business Outreach for event-level outreach
+export type BusinessOutreachStatus = 'not_contacted' | 'contacted' | 'confirmed' | 'declined'
+
+export interface BusinessOutreach {
+  id: string
+  org_id: string
+  event_id: string
+  business_id: string
+  contact_id: string | null
+  status: BusinessOutreachStatus
+  last_contacted_at: string | null
+  generated_subject_professional: string | null
+  generated_body_professional: string | null
+  generated_subject_friendly: string | null
+  generated_body_friendly: string | null
+  generated_subject_enthusiastic: string | null
+  generated_body_enthusiastic: string | null
+  generated_subject_parent: string | null
+  generated_body_parent: string | null
+  edited_subject: string | null
+  edited_body: string | null
+  edited_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export const OUTREACH_STATUS_LABELS: Record<BusinessOutreachStatus, string> = {
+  not_contacted: 'Not Contacted',
+  contacted: 'Contacted',
+  confirmed: 'Confirmed',
+  declined: 'Declined'
+}
