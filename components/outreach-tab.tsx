@@ -805,21 +805,29 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
               onValueChange={(v) => v && setTone(v as Tone)}
               className="flex flex-wrap justify-start gap-2"
             >
-              <ToggleGroupItem value="professional" className="px-3 py-1.5 text-sm">
-                Professional
-                {isEditedForTone("professional") && <Badge variant="secondary" className="ml-1 text-xs">Edited</Badge>}
+              <ToggleGroupItem value="professional" className="px-3 py-1.5 text-sm h-auto">
+                <span className="inline-flex items-center gap-1.5">
+                  Professional
+                  {isEditedForTone("professional") && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Edited</Badge>}
+                </span>
               </ToggleGroupItem>
-              <ToggleGroupItem value="friendly" className="px-3 py-1.5 text-sm">
-                Friendly
-                {isEditedForTone("friendly") && <Badge variant="secondary" className="ml-1 text-xs">Edited</Badge>}
+              <ToggleGroupItem value="friendly" className="px-3 py-1.5 text-sm h-auto">
+                <span className="inline-flex items-center gap-1.5">
+                  Friendly
+                  {isEditedForTone("friendly") && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Edited</Badge>}
+                </span>
               </ToggleGroupItem>
-              <ToggleGroupItem value="enthusiastic" className="px-3 py-1.5 text-sm">
-                Enthusiastic
-                {isEditedForTone("enthusiastic") && <Badge variant="secondary" className="ml-1 text-xs">Edited</Badge>}
+              <ToggleGroupItem value="enthusiastic" className="px-3 py-1.5 text-sm h-auto">
+                <span className="inline-flex items-center gap-1.5">
+                  Enthusiastic
+                  {isEditedForTone("enthusiastic") && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Edited</Badge>}
+                </span>
               </ToggleGroupItem>
-              <ToggleGroupItem value="parent" className="px-3 py-1.5 text-sm">
-                Parent-to-Parent
-                {isEditedForTone("parent") && <Badge variant="secondary" className="ml-1 text-xs">Edited</Badge>}
+              <ToggleGroupItem value="parent" className="px-3 py-1.5 text-sm h-auto">
+                <span className="inline-flex items-center gap-1.5">
+                  Parent-to-Parent
+                  {isEditedForTone("parent") && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Edited</Badge>}
+                </span>
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
