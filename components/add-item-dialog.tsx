@@ -28,6 +28,7 @@ import { Plus, Check, ChevronsUpDown } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { ItemFormData, ItemStatus, Package, Volunteer, Business, Contact, STATUS_LABELS } from "@/lib/types"
 import { AddVolunteerDialog } from "./add-volunteer-dialog"
+import { useToast } from "@/hooks/use-toast"
 
 interface AddItemDialogProps {
   eventId: string
@@ -50,6 +51,7 @@ export function AddItemDialog({
   defaultPackageId,
   trigger,
 }: AddItemDialogProps) {
+  const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
@@ -325,7 +327,7 @@ export function AddItemDialog({
       estimated_value: formData.estimated_value ? Number(formData.estimated_value) : null,
       status: formData.status,
       owner_id: ownerId,
-      owner_name: ownerName,
+      // Note: owner_name is not a column in the items table - it's stored on volunteers
       package_id: packageId,
       notes: formData.notes.trim() || null,
     }
@@ -340,8 +342,18 @@ export function AddItemDialog({
 
     if (error) {
       console.error("[v0] Supabase insert error:", error)
+      toast({
+        title: "Error adding item",
+        description: error.message || "Failed to add item. Please try again.",
+        variant: "destructive",
+      })
       return
     }
+    
+    toast({
+      title: "Item added",
+      description: `"${formData.name}" has been added successfully.`,
+    })
     
     console.log("[v0] Insert successful, closing dialog and calling onItemAdded")
     setFormData({
