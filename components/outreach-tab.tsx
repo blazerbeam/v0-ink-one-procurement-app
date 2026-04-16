@@ -8,10 +8,11 @@ import {
   ChevronRight,
   Copy,
   Mail,
+  Pencil,
   Plus,
   RefreshCw,
+  Search,
   User,
-  X,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -51,6 +52,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useToast } from "@/hooks/use-toast"
 import type { Business, Contact, Event, Item, BusinessOutreach, BusinessOutreachStatus } from "@/lib/types"
 
 interface OutreachTabProps {
@@ -80,6 +92,7 @@ const loadingMessages = [
 
 export function OutreachTab({ eventId, event, items }: OutreachTabProps) {
   const [filter, setFilter] = useState<OutreachFilter>("all")
+  const [searchQuery, setSearchQuery] = useState("")
   const [selectedBusiness, setSelectedBusiness] = useState<OutreachBusiness | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [addBusinessOpen, setAddBusinessOpen] = useState(false)
@@ -132,13 +145,15 @@ export function OutreachTab({ eventId, event, items }: OutreachTabProps) {
         contactsMap.get(c.business_id)!.push(c as Contact)
       })
 
-      // Build outreach business list
-      const outreachBusinesses: OutreachBusiness[] = (businessesData || []).map(business => ({
-        business: business as Business,
-        items: items.filter(i => i.business_id === business.id),
-        outreach: outreachMap.get(business.id) || null,
-        contacts: contactsMap.get(business.id) || [],
-      }))
+      // Build outreach business list and sort alphabetically by name
+      const outreachBusinesses: OutreachBusiness[] = (businessesData || [])
+        .map(business => ({
+          business: business as Business,
+          items: items.filter(i => i.business_id === business.id),
+          outreach: outreachMap.get(business.id) || null,
+          contacts: contactsMap.get(business.id) || [],
+        }))
+        .sort((a, b) => a.business.name.localeCompare(b.business.name))
 
       // Fetch all org businesses for the add dialog
       const { data: allOrgBusinesses } = await supabase
@@ -162,6 +177,14 @@ export function OutreachTab({ eventId, event, items }: OutreachTabProps) {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
   const filteredBusinesses = businesses.filter(b => {
+    // Apply search filter first
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      const matchesName = b.business.name.toLowerCase().includes(query)
+      if (!matchesName) return false
+    }
+    
+    // Apply status filter
     if (filter === "all") return true
     if (filter === "not_contacted") {
       return !b.outreach || b.outreach.status === "not_contacted"
@@ -233,6 +256,30 @@ export function OutreachTab({ eventId, event, items }: OutreachTabProps) {
       month: "short",
       day: "numeric",
     })
+  }
+
+  // Check if business has generated emails
+  const hasGeneratedEmails = (outreach: BusinessOutreach | null): boolean => {
+    if (!outreach) return false
+    const o = outreach as BusinessOutreach & {
+      generated_body_professional?: string | null
+      generated_body_friendly?: string | null
+      generated_body_enthusiastic?: string | null
+      generated_body_parent?: string | null
+    }
+    return !!(o.generated_body_professional || o.generated_body_friendly || o.generated_body_enthusiastic || o.generated_body_parent)
+  }
+
+  // Check if business has saved drafts (edited versions)
+  const hasSavedDrafts = (outreach: BusinessOutreach | null): boolean => {
+    if (!outreach) return false
+    const o = outreach as BusinessOutreach & {
+      edited_body_professional?: string | null
+      edited_body_friendly?: string | null
+      edited_body_enthusiastic?: string | null
+      edited_body_parent?: string | null
+    }
+    return !!(o.edited_body_professional || o.edited_body_friendly || o.edited_body_enthusiastic || o.edited_body_parent)
   }
 
   if (isLoading) {
@@ -330,6 +377,17 @@ export function OutreachTab({ eventId, event, items }: OutreachTabProps) {
         </Button>
       </div>
 
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search businesses by name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
       {/* Business List */}
       {filteredBusinesses.length === 0 ? (
         <Card>
@@ -351,15 +409,27 @@ export function OutreachTab({ eventId, event, items }: OutreachTabProps) {
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredBusinesses.map(({ business, items: businessItems, outreach, contacts }) => (
+          {filteredBusinesses.map(({ business, items: businessItems, outreach, contacts }) => {
+            const hasGenerated = hasGeneratedEmails(outreach)
+            const hasDrafts = hasSavedDrafts(outreach)
+            
+            return (
             <Card
               key={business.id}
-              className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+              className={`p-4 cursor-pointer hover:bg-muted/50 transition-colors relative overflow-hidden ${
+                hasDrafts ? "border-l-4 border-l-green-500" : hasGenerated ? "border-l-4 border-l-blue-500" : ""
+              }`}
               onClick={() => handleOpenSheet({ business, items: businessItems, outreach, contacts })}
             >
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
+                    {hasGenerated && (
+                      <Mail className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                    )}
+                    {hasDrafts && (
+                      <Pencil className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                    )}
                     <span className="font-semibold truncate">{business.name}</span>
                     {business.category && (
                       <Badge variant="secondary" className="text-xs shrink-0">
@@ -407,7 +477,8 @@ export function OutreachTab({ eventId, event, items }: OutreachTabProps) {
                 </div>
               </div>
             </Card>
-          ))}
+          )}
+          )}
         </div>
       )}
 
@@ -433,13 +504,20 @@ interface OutreachSheetProps {
 }
 
 function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: OutreachSheetProps) {
-  const [tone, setTone] = useState<Tone>("friendly")
+  const { toast } = useToast()
+  const [tone, setTone] = useState<Tone>("professional")
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null)
   const [status, setStatus] = useState<BusinessOutreachStatus>("not_contacted")
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0])
   const [copied, setCopied] = useState(false)
+  const [draftSaved, setDraftSaved] = useState(false)
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  
+  // Track original content to detect unsaved changes
+  const [originalSubject, setOriginalSubject] = useState("")
+  const [originalBody, setOriginalBody] = useState("")
 
   // Email content state - generated versions
   const [emails, setEmails] = useState<{
@@ -469,6 +547,7 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
   // Reset state when business changes
   useEffect(() => {
     if (business) {
+      setTone("professional") // Always default to Professional tone
       setSelectedContactId(business.outreach?.contact_id || business.contacts[0]?.id || null)
       setStatus(business.outreach?.status || "not_contacted")
       
@@ -566,6 +645,25 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
   const hasCurrentEdits = (): boolean => {
     if (!currentEmail) return false
     return editedSubject !== currentEmail.subject || editedBody !== currentEmail.body
+  }
+  
+  // Check if there are unsaved changes (differs from what was loaded)
+  const hasUnsavedChanges = (): boolean => {
+    return editedSubject !== originalSubject || editedBody !== originalBody
+  }
+  
+  // Handle close with confirmation
+  const handleClose = () => {
+    if (hasUnsavedChanges()) {
+      setShowCloseConfirm(true)
+    } else {
+      onOpenChange(false)
+    }
+  }
+  
+  const handleConfirmClose = () => {
+    setShowCloseConfirm(false)
+    onOpenChange(false)
   }
 
   const handleGenerate = async () => {
@@ -666,6 +764,19 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
       [tone]: { subject: editedSubject, body: editedBody },
     }))
     
+    // Update original to match saved content
+    setOriginalSubject(editedSubject)
+    setOriginalBody(editedBody)
+    
+    // Show save feedback
+    setDraftSaved(true)
+    setTimeout(() => setDraftSaved(false), 2000)
+    
+    toast({
+      title: "Draft saved",
+      description: "Your changes have been saved.",
+    })
+    
     onUpdate()
   }
 
@@ -675,6 +786,8 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
     // Reset local state to generated version
     setEditedSubject(currentEmail.subject)
     setEditedBody(currentEmail.body)
+    setOriginalSubject(currentEmail.subject)
+    setOriginalBody(currentEmail.body)
     
     // Clear the per-tone edited columns in DB
     const supabase = createClient()
@@ -728,21 +841,34 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
   // Sync working content when tone changes - load edited version if exists, otherwise generated
   useEffect(() => {
     const editedForTone = editedEmails[tone]
+    let subject = ""
+    let body = ""
+    
     if (editedForTone) {
       // Load the edited version for this tone
-      setEditedSubject(editedForTone.subject)
-      setEditedBody(editedForTone.body)
+      subject = editedForTone.subject
+      body = editedForTone.body
     } else if (currentEmail) {
       // No edited version, load generated
-      setEditedSubject(currentEmail.subject)
-      setEditedBody(currentEmail.body)
+      subject = currentEmail.subject
+      body = currentEmail.body
     }
+    
+    setEditedSubject(subject)
+    setEditedBody(body)
+    setOriginalSubject(subject)
+    setOriginalBody(body)
   }, [tone, currentEmail, editedEmails])
 
   if (!business) return null
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <>
+    <Sheet open={open} onOpenChange={(isOpen) => {
+      if (!isOpen) {
+        handleClose()
+      }
+    }}>
       <SheetContent className="w-[520px] sm:max-w-[520px] flex flex-col">
         <SheetHeader className="border-b pb-4">
           <SheetTitle className="flex items-center gap-2">
@@ -805,29 +931,21 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
               onValueChange={(v) => v && setTone(v as Tone)}
               className="flex flex-wrap justify-start gap-2"
             >
-              <ToggleGroupItem value="professional" className="px-3 py-1.5 text-sm h-auto">
-                <span className="inline-flex items-center gap-1.5">
-                  Professional
-                  {isEditedForTone("professional") && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Edited</Badge>}
-                </span>
+              <ToggleGroupItem value="professional" className="px-3 py-1.5 text-sm h-auto min-w-[120px] justify-center">
+                {isEditedForTone("professional") && <span className="text-green-500 mr-1">●</span>}
+                Professional
               </ToggleGroupItem>
-              <ToggleGroupItem value="friendly" className="px-3 py-1.5 text-sm h-auto">
-                <span className="inline-flex items-center gap-1.5">
-                  Friendly
-                  {isEditedForTone("friendly") && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Edited</Badge>}
-                </span>
+              <ToggleGroupItem value="friendly" className="px-3 py-1.5 text-sm h-auto min-w-[120px] justify-center">
+                {isEditedForTone("friendly") && <span className="text-green-500 mr-1">●</span>}
+                Friendly
               </ToggleGroupItem>
-              <ToggleGroupItem value="enthusiastic" className="px-3 py-1.5 text-sm h-auto">
-                <span className="inline-flex items-center gap-1.5">
-                  Enthusiastic
-                  {isEditedForTone("enthusiastic") && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Edited</Badge>}
-                </span>
+              <ToggleGroupItem value="enthusiastic" className="px-3 py-1.5 text-sm h-auto min-w-[120px] justify-center">
+                {isEditedForTone("enthusiastic") && <span className="text-green-500 mr-1">●</span>}
+                Enthusiastic
               </ToggleGroupItem>
-              <ToggleGroupItem value="parent" className="px-3 py-1.5 text-sm h-auto">
-                <span className="inline-flex items-center gap-1.5">
-                  Parent-to-Parent
-                  {isEditedForTone("parent") && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Edited</Badge>}
-                </span>
+              <ToggleGroupItem value="parent" className="px-3 py-1.5 text-sm h-auto min-w-[120px] justify-center">
+                {isEditedForTone("parent") && <span className="text-green-500 mr-1">●</span>}
+                Parent-to-Parent
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
@@ -887,8 +1005,15 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
                     </>
                   )}
                 </Button>
-                <Button onClick={handleSaveDraft} className="flex-1">
-                  Save Draft
+                <Button onClick={handleSaveDraft} className="flex-1" disabled={draftSaved}>
+                  {draftSaved ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Saved
+                    </>
+                  ) : (
+                    "Save Draft"
+                  )}
                 </Button>
               </div>
 
@@ -913,5 +1038,23 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
         </div>
       </SheetContent>
     </Sheet>
+    
+    <AlertDialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>You have unsaved changes</AlertDialogTitle>
+          <AlertDialogDescription>
+            Your edits have not been saved. Are you sure you want to close?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirmClose}>
+            Close Anyway
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }
