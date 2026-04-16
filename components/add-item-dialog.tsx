@@ -291,7 +291,14 @@ export function AddItemDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.name.trim()) return
+    console.log("[v0] handleSubmit called")
+    console.log("[v0] eventId:", eventId)
+    console.log("[v0] formData.name:", formData.name)
+    
+    if (!formData.name.trim()) {
+      console.log("[v0] Name is empty, returning early")
+      return
+    }
 
     setIsSubmitting(true)
     const supabase = createClient()
@@ -306,7 +313,7 @@ export function AddItemDialog({
     const businessId = formData.business_id !== "none" ? formData.business_id : null
     const contactId = formData.contact_id !== "none" ? formData.contact_id : null
 
-    const { error } = await supabase.from("items").insert({
+    const insertPayload = {
       event_id: eventId,
       name: formData.name.trim(),
       description: formData.description.trim() || null,
@@ -321,28 +328,38 @@ export function AddItemDialog({
       owner_name: ownerName,
       package_id: packageId,
       notes: formData.notes.trim() || null,
-    })
+    }
+    
+    console.log("[v0] Insert payload:", insertPayload)
+
+    const { data, error } = await supabase.from("items").insert(insertPayload).select()
+    
+    console.log("[v0] Supabase insert result - data:", data, "error:", error)
 
     setIsSubmitting(false)
 
-    if (!error) {
-      setFormData({
-        name: "",
-        description: "",
-        business_id: "none",
-        business_name: "",
-        contact_id: "none",
-        contact_name: "",
-        estimated_value: "",
-        status: "needed",
-        owner_id: "",
-        package_id: "",
-        notes: "",
-      })
-      setContacts([])
-      setOpen(false)
-      onItemAdded()
+    if (error) {
+      console.error("[v0] Supabase insert error:", error)
+      return
     }
+    
+    console.log("[v0] Insert successful, closing dialog and calling onItemAdded")
+    setFormData({
+      name: "",
+      description: "",
+      business_id: "none",
+      business_name: "",
+      contact_id: "none",
+      contact_name: "",
+      estimated_value: "",
+      status: "needed",
+      owner_id: "",
+      package_id: "",
+      notes: "",
+    })
+    setContacts([])
+    setOpen(false)
+    onItemAdded()
   }
 
   return (
