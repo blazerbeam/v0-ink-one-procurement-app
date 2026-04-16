@@ -98,6 +98,8 @@ export function EventDetail({ eventId }: EventDetailProps) {
   const [editingItem, setEditingItem] = useState<Item | null>(null)
   const [editingEvent, setEditingEvent] = useState(false)
   const [outreachItem, setOutreachItem] = useState<Item | null>(null)
+  const [outreachPreSelectItemId, setOutreachPreSelectItemId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState("items")
   const [isMounted, setIsMounted] = useState(false)
   
   // Filter state
@@ -366,7 +368,16 @@ export function EventDetail({ eventId }: EventDetailProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenuItem
-                  onClick={() => setOutreachItem(item)}
+                  onClick={() => {
+                    if (item.business_id) {
+                      // Has a business - switch to outreach tab and pre-select this item
+                      setOutreachPreSelectItemId(item.id)
+                      setActiveTab("outreach")
+                    } else {
+                      // No business - use the old item-level outreach
+                      setOutreachItem(item)
+                    }
+                  }}
                 >
                   <Mail className="mr-2 h-4 w-4" />
                   Generate Outreach Email
@@ -928,7 +939,7 @@ export function EventDetail({ eventId }: EventDetailProps) {
           )}
 
           {/* Tabs */}
-          <Tabs defaultValue="items" className="space-y-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList>
               <TabsTrigger value="items">Items & Packages</TabsTrigger>
               <TabsTrigger value="volunteers">Volunteers ({volunteers.length})</TabsTrigger>
@@ -942,7 +953,13 @@ export function EventDetail({ eventId }: EventDetailProps) {
               <VolunteersTab />
             </TabsContent>
             <TabsContent value="outreach">
-              <OutreachTab eventId={eventId} event={event} items={items} />
+              <OutreachTab 
+    eventId={eventId} 
+    event={event} 
+    items={items}
+    preSelectedItemId={outreachPreSelectItemId}
+    onPreSelectClear={() => setOutreachPreSelectItemId(null)}
+  />
             </TabsContent>
             <TabsContent value="community">
               <CommunityDonationsTab eventId={eventId} eventName={event.event_name} items={items} />

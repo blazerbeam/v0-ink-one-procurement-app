@@ -158,9 +158,12 @@ export function EditItemSheet({
     }
   }, [formData.business_id])
 
+  // Track if we've initialized the form for this item
+  const [initializedItemId, setInitializedItemId] = useState<string | null>(null)
+
   // Update form data when item changes - only when sheet is open
   useEffect(() => {
-    if (open && item) {
+    if (open && item && initializedItemId !== item.id) {
       // Try to match owner_id first, otherwise try to find volunteer by owner_name text
       let ownerId = item.owner_id || "none"
       if (ownerId === "none" && item.owner_name) {
@@ -200,8 +203,10 @@ export function EditItemSheet({
         package_id: item.package_id || "none",
         notes: item.notes || "",
       })
+      
+      setInitializedItemId(item.id)
     }
-  }, [open, item, volunteers, businesses])
+  }, [open, item, volunteers, businesses, initializedItemId])
 
   // When contacts load and we have a contact_id or contact_name, try to pre-select
   useEffect(() => {
@@ -243,6 +248,7 @@ export function EditItemSheet({
       setBusinesses([])
       setContacts([])
       setOrgId(null)
+      setInitializedItemId(null)
       // Reset inline dialog states
       setNewBusinessName("")
       setNewBusinessCategory("")
@@ -377,6 +383,10 @@ export function EditItemSheet({
     if (!item || !formData.name.trim()) return
 
     setIsSubmitting(true)
+    
+    console.log("[v0] handleSubmit called for item:", item.id)
+    console.log("[v0] formData.status:", formData.status)
+    console.log("[v0] original item.status:", item.status)
 
     // Get owner name from volunteer if selected
     const ownerId = formData.owner_id !== "none" ? formData.owner_id : null
@@ -388,31 +398,41 @@ export function EditItemSheet({
     const businessId = formData.business_id !== "none" ? formData.business_id : null
     const contactId = formData.contact_id !== "none" ? formData.contact_id : null
 
+    const updatePayload = {
+      name: formData.name.trim(),
+      description: formData.description.trim() || null,
+      business_id: businessId,
+      business_name: formData.business_name.trim() || null,
+      contact_id: contactId,
+      contact_name: formData.contact_name.trim() || null,
+      donor_name: formData.business_name.trim() || null, // backwards compat
+      estimated_value: formData.estimated_value ? Number(formData.estimated_value) : null,
+      status: formData.status,
+      owner_id: ownerId,
+      owner_name: ownerName,
+      package_id: packageId,
+      notes: formData.notes.trim() || null,
+    }
+    
+    console.log("[v0] update payload:", updatePayload)
+
     const supabase = createClient()
-    const { error } = await supabase
+    const { error, data } = await supabase
       .from("items")
-      .update({
-        name: formData.name.trim(),
-        description: formData.description.trim() || null,
-        business_id: businessId,
-        business_name: formData.business_name.trim() || null,
-        contact_id: contactId,
-        contact_name: formData.contact_name.trim() || null,
-        donor_name: formData.business_name.trim() || null, // backwards compat
-        estimated_value: formData.estimated_value ? Number(formData.estimated_value) : null,
-        status: formData.status,
-        owner_id: ownerId,
-        owner_name: ownerName,
-        package_id: packageId,
-        notes: formData.notes.trim() || null,
-      })
+      .update(updatePayload)
       .eq("id", item.id)
+      .select()
+
+    console.log("[v0] supabase update result - error:", error, "data:", data)
 
     setIsSubmitting(false)
 
     if (!error) {
+      console.log("[v0] update successful, calling onUpdate")
       onUpdate()
       onOpenChange(false)
+    } else {
+      console.error("[v0] update failed:", error)
     }
   }
 
