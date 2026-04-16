@@ -441,7 +441,7 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0])
   const [copied, setCopied] = useState(false)
 
-  // Email content state
+  // Email content state - generated versions
   const [emails, setEmails] = useState<{
     professional: { subject: string; body: string }
     friendly: { subject: string; body: string }
@@ -449,10 +449,22 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
     parent: { subject: string; body: string }
   } | null>(null)
 
-  // Edited content
+  // Per-tone edited content from DB
+  const [editedEmails, setEditedEmails] = useState<{
+    professional: { subject: string; body: string } | null
+    friendly: { subject: string; body: string } | null
+    enthusiastic: { subject: string; body: string } | null
+    parent: { subject: string; body: string } | null
+  }>({
+    professional: null,
+    friendly: null,
+    enthusiastic: null,
+    parent: null,
+  })
+
+  // Current working content (what's shown in the form)
   const [editedSubject, setEditedSubject] = useState("")
   const [editedBody, setEditedBody] = useState("")
-  const [hasEdited, setHasEdited] = useState(false)
 
   // Reset state when business changes
   useEffect(() => {
@@ -462,7 +474,18 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
       
       // Load saved emails if they exist
       if (business.outreach) {
-        const o = business.outreach
+        const o = business.outreach as BusinessOutreach & {
+          edited_subject_professional?: string | null
+          edited_body_professional?: string | null
+          edited_subject_friendly?: string | null
+          edited_body_friendly?: string | null
+          edited_subject_enthusiastic?: string | null
+          edited_body_enthusiastic?: string | null
+          edited_subject_parent?: string | null
+          edited_body_parent?: string | null
+        }
+        
+        // Load generated emails
         if (o.generated_body_professional || o.generated_body_friendly || o.generated_body_enthusiastic || o.generated_body_parent) {
           setEmails({
             professional: { subject: o.generated_subject_professional || "", body: o.generated_body_professional || "" },
@@ -474,22 +497,34 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
           setEmails(null)
         }
         
-        // Load edited version if exists
-        if (o.edited_subject || o.edited_body) {
-          setEditedSubject(o.edited_subject || "")
-          setEditedBody(o.edited_body || "")
-          setHasEdited(true)
-        } else {
-          setEditedSubject("")
-          setEditedBody("")
-          setHasEdited(false)
-        }
+        // Load per-tone edited versions
+        setEditedEmails({
+          professional: (o.edited_subject_professional || o.edited_body_professional)
+            ? { subject: o.edited_subject_professional || "", body: o.edited_body_professional || "" }
+            : null,
+          friendly: (o.edited_subject_friendly || o.edited_body_friendly)
+            ? { subject: o.edited_subject_friendly || "", body: o.edited_body_friendly || "" }
+            : null,
+          enthusiastic: (o.edited_subject_enthusiastic || o.edited_body_enthusiastic)
+            ? { subject: o.edited_subject_enthusiastic || "", body: o.edited_body_enthusiastic || "" }
+            : null,
+          parent: (o.edited_subject_parent || o.edited_body_parent)
+            ? { subject: o.edited_subject_parent || "", body: o.edited_body_parent || "" }
+            : null,
+        })
       } else {
         setEmails(null)
-        setEditedSubject("")
-        setEditedBody("")
-        setHasEdited(false)
+        setEditedEmails({
+          professional: null,
+          friendly: null,
+          enthusiastic: null,
+          parent: null,
+        })
       }
+      
+      // Reset working content - will be set by tone effect
+      setEditedSubject("")
+      setEditedBody("")
     }
   }, [business])
 
@@ -518,6 +553,20 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
 
   const selectedContact = business?.contacts.find(c => c.id === selectedContactId)
   const currentEmail = emails?.[tone]
+  
+  // Check if a tone has edits that differ from the generated version
+  const isEditedForTone = (checkTone: Tone): boolean => {
+    const edited = editedEmails[checkTone]
+    const generated = emails?.[checkTone]
+    if (!edited || !generated) return false
+    return edited.subject !== generated.subject || edited.body !== generated.body
+  }
+  
+  // Check if current working content differs from generated (for showing revert button)
+  const hasCurrentEdits = (): boolean => {
+    if (!currentEmail) return false
+    return editedSubject !== currentEmail.subject || editedBody !== currentEmail.body
+  }
 
   const handleGenerate = async () => {
     if (!business) return
@@ -594,27 +643,58 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
     if (!business) return
 
     const supabase = createClient()
-    await supabase.from("business_outreach").upsert({
+    
+    // Build update object with only the current tone's edited columns
+    const updateData: Record<string, unknown> = {
       org_id: event.org_id,
       event_id: event.id,
       business_id: business.business.id,
       contact_id: selectedContactId,
       status,
-      edited_subject: editedSubject,
-      edited_body: editedBody,
       edited_at: new Date().toISOString(),
-    }, { onConflict: "event_id,business_id" })
+    }
+    
+    // Set the per-tone edited columns based on current tone
+    updateData[`edited_subject_${tone}`] = editedSubject
+    updateData[`edited_body_${tone}`] = editedBody
+    
+    await supabase.from("business_outreach").upsert(updateData, { onConflict: "event_id,business_id" })
 
-    setHasEdited(true)
+    // Update local state for per-tone edited emails
+    setEditedEmails(prev => ({
+      ...prev,
+      [tone]: { subject: editedSubject, body: editedBody },
+    }))
+    
     onUpdate()
   }
 
-  const handleRevertToGenerated = () => {
-    if (currentEmail) {
-      setEditedSubject(currentEmail.subject)
-      setEditedBody(currentEmail.body)
-      setHasEdited(false)
+  const handleRevertToGenerated = async () => {
+    if (!business || !currentEmail) return
+    
+    // Reset local state to generated version
+    setEditedSubject(currentEmail.subject)
+    setEditedBody(currentEmail.body)
+    
+    // Clear the per-tone edited columns in DB
+    const supabase = createClient()
+    const updateData: Record<string, unknown> = {
+      org_id: event.org_id,
+      event_id: event.id,
+      business_id: business.business.id,
     }
+    updateData[`edited_subject_${tone}`] = null
+    updateData[`edited_body_${tone}`] = null
+    
+    await supabase.from("business_outreach").upsert(updateData, { onConflict: "event_id,business_id" })
+    
+    // Update local edited emails state
+    setEditedEmails(prev => ({
+      ...prev,
+      [tone]: null,
+    }))
+    
+    onUpdate()
   }
 
   const handleStatusChange = async (newStatus: BusinessOutreachStatus) => {
@@ -638,22 +718,26 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
   }
 
   const handleCopy = () => {
-    const subject = hasEdited ? editedSubject : currentEmail?.subject
-    const body = hasEdited ? editedBody : currentEmail?.body
-    if (!subject || !body) return
+    if (!editedSubject || !editedBody) return
 
-    navigator.clipboard.writeText(`Subject: ${subject}\n\n${body}`)
+    navigator.clipboard.writeText(`Subject: ${editedSubject}\n\n${editedBody}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Sync edited content when tone changes
+  // Sync working content when tone changes - load edited version if exists, otherwise generated
   useEffect(() => {
-    if (currentEmail && !hasEdited) {
+    const editedForTone = editedEmails[tone]
+    if (editedForTone) {
+      // Load the edited version for this tone
+      setEditedSubject(editedForTone.subject)
+      setEditedBody(editedForTone.body)
+    } else if (currentEmail) {
+      // No edited version, load generated
       setEditedSubject(currentEmail.subject)
       setEditedBody(currentEmail.body)
     }
-  }, [tone, currentEmail, hasEdited])
+  }, [tone, currentEmail, editedEmails])
 
   if (!business) return null
 
@@ -723,16 +807,19 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
             >
               <ToggleGroupItem value="professional" className="px-3 py-1.5 text-sm">
                 Professional
-                {hasEdited && tone === "professional" && <Badge variant="secondary" className="ml-1 text-xs">Edited</Badge>}
+                {isEditedForTone("professional") && <Badge variant="secondary" className="ml-1 text-xs">Edited</Badge>}
               </ToggleGroupItem>
               <ToggleGroupItem value="friendly" className="px-3 py-1.5 text-sm">
                 Friendly
+                {isEditedForTone("friendly") && <Badge variant="secondary" className="ml-1 text-xs">Edited</Badge>}
               </ToggleGroupItem>
               <ToggleGroupItem value="enthusiastic" className="px-3 py-1.5 text-sm">
                 Enthusiastic
+                {isEditedForTone("enthusiastic") && <Badge variant="secondary" className="ml-1 text-xs">Edited</Badge>}
               </ToggleGroupItem>
               <ToggleGroupItem value="parent" className="px-3 py-1.5 text-sm">
                 Parent-to-Parent
+                {isEditedForTone("parent") && <Badge variant="secondary" className="ml-1 text-xs">Edited</Badge>}
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
@@ -762,11 +849,8 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
                 <Label htmlFor="subject">Subject Line</Label>
                 <Input
                   id="subject"
-                  value={hasEdited ? editedSubject : currentEmail.subject}
-                  onChange={(e) => {
-                    setEditedSubject(e.target.value)
-                    if (e.target.value !== currentEmail.subject) setHasEdited(true)
-                  }}
+                  value={editedSubject}
+                  onChange={(e) => setEditedSubject(e.target.value)}
                 />
               </div>
 
@@ -774,11 +858,8 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
                 <Label htmlFor="body">Email Body</Label>
                 <Textarea
                   id="body"
-                  value={hasEdited ? editedBody : currentEmail.body}
-                  onChange={(e) => {
-                    setEditedBody(e.target.value)
-                    if (e.target.value !== currentEmail.body) setHasEdited(true)
-                  }}
+                  value={editedBody}
+                  onChange={(e) => setEditedBody(e.target.value)}
                   rows={12}
                   className="resize-y"
                 />
@@ -803,7 +884,7 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate }: Outrea
                 </Button>
               </div>
 
-              {hasEdited && (
+              {hasCurrentEdits() && (
                 <Button variant="ghost" size="sm" onClick={handleRevertToGenerated} className="w-full">
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Revert to Generated
