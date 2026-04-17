@@ -788,6 +788,8 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
   const [copied, setCopied] = useState(false)
   const [draftSaved, setDraftSaved] = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const [showSentConfirm, setShowSentConfirm] = useState(false)
+  const [markingAsSent, setMarkingAsSent] = useState(false)
   
   // Track original content to detect unsaved changes
   const [originalSubject, setOriginalSubject] = useState("")
@@ -1172,60 +1174,81 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
     onUpdate()
   }
 
-  const handleStatusChange = async (newStatus: BusinessOutreachStatus) => {
-    if (!business) return
-    setStatus(newStatus)
-
-    const supabase = createClient()
-    const updateData: Record<string, unknown> = {
-      status: newStatus,
-    }
-
-    if (newStatus === "contacted") {
-      updateData.last_contacted_at = new Date().toISOString()
-    }
-
-    if (business.outreach?.id) {
-      await supabase.from("business_outreach").update(updateData).eq("id", business.outreach.id)
-    } else {
-      await supabase.from("business_outreach").insert({
-        ...updateData,
-        org_id: event.org_id,
-        event_id: event.id,
-        business_id: business.business.id,
-        round_number: 1,
-        is_latest: true,
-      })
-    }
-    
-    // Map outreach status to item status and update only selected items
-    const itemStatusMap: Record<BusinessOutreachStatus, string> = {
-      not_contacted: "needed",
-      contacted: "contacted",
-      confirmed: "confirmed",
-      declined: "declined",
-    }
-    
-    const newItemStatus = itemStatusMap[newStatus]
-    
-    // Update only the items that are in the selected set
-    if (selectedItemIds.size > 0) {
-      const selectedItemIdsArray = Array.from(selectedItemIds)
-      await supabase
-        .from("items")
-        .update({ status: newItemStatus })
-        .in("id", selectedItemIdsArray)
-    }
-    
-    onUpdate()
-  }
-
   const handleCopy = () => {
     if (!editedSubject || !editedBody) return
 
     navigator.clipboard.writeText(`Subject: ${editedSubject}\n\n${editedBody}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleMarkAsSent = async () => {
+    if (!business) return
+    
+    setMarkingAsSent(true)
+    const supabase = createClient()
+    const now = new Date().toISOString()
+    
+    let outreachId = business.outreach?.id
+    
+    const updateData = {
+      status: "contacted" as const,
+      sent_tone: tone,
+      sent_at: now,
+      last_contacted_at: now,
+    }
+    
+    if (outreachId) {
+      // Update existing outreach record
+      await supabase.from("business_outreach").update(updateData).eq("id", outreachId)
+    } else {
+      // Create new outreach record
+      const { data: outreachData } = await supabase.from("business_outreach").insert({
+        ...updateData,
+        org_id: event.org_id,
+        event_id: event.id,
+        business_id: business.business.id,
+        round_number: 1,
+        is_latest: true,
+      }).select("id").single()
+      
+      outreachId = outreachData?.id
+    }
+    
+    // Sync selected items to business_outreach_items
+    if (outreachId) {
+      // Delete existing items for this outreach
+      await supabase.from("business_outreach_items").delete().eq("outreach_id", outreachId)
+      
+      // Insert new selected items
+      if (selectedItemIds.size > 0) {
+        const itemsToInsert = Array.from(selectedItemIds).map(itemId => ({
+          outreach_id: outreachId,
+          item_id: itemId,
+        }))
+        await supabase.from("business_outreach_items").insert(itemsToInsert)
+      }
+    }
+    
+    // Update items.status to "contacted" for all selected items
+    if (selectedItemIds.size > 0) {
+      const selectedItemIdsArray = Array.from(selectedItemIds)
+      await supabase
+        .from("items")
+        .update({ status: "contacted" })
+        .in("id", selectedItemIdsArray)
+    }
+    
+    setStatus("contacted")
+    setMarkingAsSent(false)
+    setShowSentConfirm(false)
+    
+    toast({
+      title: "Marked as sent",
+      description: `Email sent using ${tone} tone. ${selectedItemIds.size} item(s) updated.`,
+    })
+    
+    onUpdate()
   }
 
   // Sync working content when tone changes - load edited version if exists, otherwise generated
@@ -1388,20 +1411,39 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
             </div>
           )}
 
-          {/* Status Selector */}
+          {/* Current Status Display */}
           <div className="space-y-2">
-            <Label>Status</Label>
-            <Select value={status} onValueChange={(v) => handleStatusChange(v as BusinessOutreachStatus)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="not_contacted">Not Contacted</SelectItem>
-                <SelectItem value="contacted">Contacted</SelectItem>
-                <SelectItem value="confirmed">Confirmed</SelectItem>
-                <SelectItem value="declined">Declined</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label>Current Status</Label>
+            <div className="flex items-center gap-2">
+              {status === "not_contacted" && (
+                <Badge variant="secondary" className="bg-gray-100 text-gray-700">Not Contacted</Badge>
+              )}
+              {status === "contacted" && (
+                <Badge variant="secondary" className="bg-blue-100 text-blue-700">Contacted</Badge>
+              )}
+              {status === "confirmed" && (
+                <Badge variant="secondary" className="bg-teal-100 text-teal-700">Confirmed</Badge>
+              )}
+              {status === "declined" && (
+                <Badge variant="secondary" className="bg-red-100 text-red-700">Declined</Badge>
+              )}
+              {(() => {
+                const o = business.outreach as BusinessOutreach & { sent_at?: string | null; sent_tone?: string | null } | null
+                if (o?.sent_at) {
+                  return (
+                    <span className="text-xs text-muted-foreground">
+                      Sent {new Date(o.sent_at).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                      {o.sent_tone && ` (${o.sent_tone})`}
+                    </span>
+                  )
+                }
+                return null
+              })()}
+            </div>
           </div>
 
           {/* Tone Tabs */}
@@ -1499,6 +1541,15 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
                 </Button>
               </div>
 
+              {/* Mark as Sent Button */}
+              <Button 
+                onClick={() => setShowSentConfirm(true)} 
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                {status === "contacted" ? "Mark as Re-sent" : "Mark as Sent"}
+              </Button>
+
               {hasCurrentEdits() && (
                 <Button variant="ghost" size="sm" onClick={handleRevertToGenerated} className="w-full">
                   <RefreshCw className="mr-2 h-4 w-4" />
@@ -1533,6 +1584,59 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction onClick={handleConfirmClose}>
             Close Anyway
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    
+    <AlertDialog open={showSentConfirm} onOpenChange={setShowSentConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Mark as Sent?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3">
+              <p>This will record that you sent the email and update the outreach status.</p>
+              
+              <div className="bg-muted rounded-lg p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-foreground">Tone:</span>
+                  <Badge variant="secondary" className="capitalize">{tone}</Badge>
+                </div>
+                
+                {selectedItemIds.size > 0 && (
+                  <div>
+                    <span className="text-sm font-medium text-foreground">Items included:</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {business?.items
+                        .filter(item => selectedItemIds.has(item.id))
+                        .map(item => (
+                          <Badge key={item.id} variant="outline" className="text-xs">
+                            {item.name}
+                          </Badge>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                
+                {selectedItemIds.size === 0 && (
+                  <p className="text-sm text-amber-600">No items selected (general support request)</p>
+                )}
+              </div>
+              
+              <p className="text-xs text-muted-foreground">
+                Selected items will be marked as &quot;Contacted&quot;.
+              </p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={markingAsSent}>Cancel</AlertDialogCancel>
+          <AlertDialogAction 
+            onClick={handleMarkAsSent} 
+            disabled={markingAsSent}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {markingAsSent ? "Marking..." : "Confirm Sent"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
