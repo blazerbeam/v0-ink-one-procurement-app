@@ -650,21 +650,28 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
                     generated_body_enthusiastic?: string | null
                     generated_subject_parent?: string | null
                     generated_body_parent?: string | null
+                    sent_at?: string | null
+                    sent_tone?: string | null
                   }
                   
-                  // Collect all generated tones
+                  // Only show email content for rounds that were actually sent
+                  const wasSent = !!o.sent_at
+                  
+                  // Collect all generated tones (only for sent rounds)
                   const generatedTones: { tone: string; subject: string; body: string }[] = []
-                  if (o.generated_body_professional) {
-                    generatedTones.push({ tone: "Professional", subject: o.generated_subject_professional || "", body: o.generated_body_professional })
-                  }
-                  if (o.generated_body_friendly) {
-                    generatedTones.push({ tone: "Friendly", subject: o.generated_subject_friendly || "", body: o.generated_body_friendly })
-                  }
-                  if (o.generated_body_enthusiastic) {
-                    generatedTones.push({ tone: "Enthusiastic", subject: o.generated_subject_enthusiastic || "", body: o.generated_body_enthusiastic })
-                  }
-                  if (o.generated_body_parent) {
-                    generatedTones.push({ tone: "Parent-to-Parent", subject: o.generated_subject_parent || "", body: o.generated_body_parent })
+                  if (wasSent) {
+                    if (o.generated_body_professional) {
+                      generatedTones.push({ tone: "Professional", subject: o.generated_subject_professional || "", body: o.generated_body_professional })
+                    }
+                    if (o.generated_body_friendly) {
+                      generatedTones.push({ tone: "Friendly", subject: o.generated_subject_friendly || "", body: o.generated_body_friendly })
+                    }
+                    if (o.generated_body_enthusiastic) {
+                      generatedTones.push({ tone: "Enthusiastic", subject: o.generated_subject_enthusiastic || "", body: o.generated_body_enthusiastic })
+                    }
+                    if (o.generated_body_parent) {
+                      generatedTones.push({ tone: "Parent-to-Parent", subject: o.generated_subject_parent || "", body: o.generated_body_parent })
+                    }
                   }
                   
                   const statusBadge = (status: string) => {
@@ -726,10 +733,16 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
                         )}
                       </button>
                       
-                      {/* Expanded content - show generated emails */}
+                      {/* Expanded content - show generated emails only for sent rounds */}
                       {isExpanded && (
                         <div className="border-t bg-gray-50 p-4 space-y-4">
-                          {generatedTones.length === 0 ? (
+                          {!wasSent ? (
+                            <p className="text-sm text-muted-foreground text-center">
+                              {outreach.is_latest 
+                                ? "This is the current round. Generate and send an email to see content here."
+                                : "This round was not sent."}
+                            </p>
+                          ) : generatedTones.length === 0 ? (
                             <p className="text-sm text-muted-foreground text-center">
                               No emails were generated for this round.
                             </p>
@@ -1038,40 +1051,47 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
 
     const supabase = createClient()
     
+    // Always check for existing record first to avoid duplicates
     let outreachId = business.outreach?.id
+    
+    if (!outreachId) {
+      // Check if a record already exists in DB (could have been created elsewhere)
+      const { data: existingRecord } = await supabase
+        .from("business_outreach")
+        .select("id")
+        .eq("event_id", event.id)
+        .eq("business_id", business.business.id)
+        .eq("is_latest", true)
+        .single()
+      
+      outreachId = existingRecord?.id
+    }
+    
+    const emailData = {
+      contact_id: selectedContactId,
+      status,
+      generated_subject_professional: emailsToSave.professional.subject,
+      generated_body_professional: emailsToSave.professional.body,
+      generated_subject_friendly: emailsToSave.friendly.subject,
+      generated_body_friendly: emailsToSave.friendly.body,
+      generated_subject_enthusiastic: emailsToSave.enthusiastic.subject,
+      generated_body_enthusiastic: emailsToSave.enthusiastic.body,
+      generated_subject_parent: emailsToSave.parent.subject,
+      generated_body_parent: emailsToSave.parent.body,
+    }
     
     if (outreachId) {
       // Update existing outreach record
-      await supabase.from("business_outreach").update({
-        contact_id: selectedContactId,
-        status,
-        generated_subject_professional: emailsToSave.professional.subject,
-        generated_body_professional: emailsToSave.professional.body,
-        generated_subject_friendly: emailsToSave.friendly.subject,
-        generated_body_friendly: emailsToSave.friendly.body,
-        generated_subject_enthusiastic: emailsToSave.enthusiastic.subject,
-        generated_body_enthusiastic: emailsToSave.enthusiastic.body,
-        generated_subject_parent: emailsToSave.parent.subject,
-        generated_body_parent: emailsToSave.parent.body,
-      }).eq("id", outreachId)
+      await supabase.from("business_outreach").update(emailData).eq("id", outreachId)
     } else {
-      // Create new outreach record
+      // No record exists - create one
       const { data: outreachData } = await supabase.from("business_outreach").insert({
+        ...emailData,
         org_id: event.org_id,
         event_id: event.id,
         business_id: business.business.id,
-        contact_id: selectedContactId,
-        status,
         round_number: 1,
         is_latest: true,
-        generated_subject_professional: emailsToSave.professional.subject,
-        generated_body_professional: emailsToSave.professional.body,
-        generated_subject_friendly: emailsToSave.friendly.subject,
-        generated_body_friendly: emailsToSave.friendly.body,
-        generated_subject_enthusiastic: emailsToSave.enthusiastic.subject,
-        generated_body_enthusiastic: emailsToSave.enthusiastic.body,
-        generated_subject_parent: emailsToSave.parent.subject,
-        generated_body_parent: emailsToSave.parent.body,
       }).select("id").single()
       
       outreachId = outreachData?.id
@@ -1111,19 +1131,34 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
     updateData[`edited_subject_${tone}`] = editedSubject
     updateData[`edited_body_${tone}`] = editedBody
     
-    if (business.outreach?.id) {
-      // Update existing record
-      await supabase.from("business_outreach").update(updateData).eq("id", business.outreach.id)
+    // Get the outreach ID - check local state first, then query DB
+    let outreachId = business.outreach?.id
+    
+    if (!outreachId) {
+      // Check if a record exists in DB
+      const { data: existingRecord } = await supabase
+        .from("business_outreach")
+        .select("id")
+        .eq("event_id", event.id)
+        .eq("business_id", business.business.id)
+        .eq("is_latest", true)
+        .single()
+      
+      outreachId = existingRecord?.id
+    }
+    
+    if (outreachId) {
+      // Always update existing record - never insert on save draft
+      await supabase.from("business_outreach").update(updateData).eq("id", outreachId)
     } else {
-      // Create new record
-      await supabase.from("business_outreach").insert({
-        ...updateData,
-        org_id: event.org_id,
-        event_id: event.id,
-        business_id: business.business.id,
-        round_number: 1,
-        is_latest: true,
+      // No record exists - this shouldn't happen normally (Generate Email creates the record)
+      // but handle it gracefully
+      toast({
+        title: "Cannot save draft",
+        description: "Please generate an email first.",
+        variant: "destructive",
       })
+      return
     }
 
     // Update local state for per-tone edited emails
@@ -1189,46 +1224,65 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
     const supabase = createClient()
     const now = new Date().toISOString()
     
+    // Get the current outreach ID
     let outreachId = business.outreach?.id
     
-    const updateData = {
-      status: "contacted" as const,
+    if (!outreachId) {
+      // Check if a record exists in DB
+      const { data: existingRecord } = await supabase
+        .from("business_outreach")
+        .select("id, round_number")
+        .eq("event_id", event.id)
+        .eq("business_id", business.business.id)
+        .eq("is_latest", true)
+        .single()
+      
+      outreachId = existingRecord?.id
+    }
+    
+    if (!outreachId) {
+      toast({
+        title: "Cannot mark as sent",
+        description: "Please generate an email first.",
+        variant: "destructive",
+      })
+      setMarkingAsSent(false)
+      return
+    }
+    
+    // Get current round number
+    const currentRoundNumber = business.outreach?.round_number || 1
+    
+    // Step 1: Update current record - mark as sent and close the round
+    await supabase.from("business_outreach").update({
+      status: "contacted",
       sent_tone: tone,
       sent_at: now,
       last_contacted_at: now,
+      is_latest: false, // Close this round
+    }).eq("id", outreachId)
+    
+    // Sync selected items to business_outreach_items for this round
+    await supabase.from("business_outreach_items").delete().eq("outreach_id", outreachId)
+    if (selectedItemIds.size > 0) {
+      const itemsToInsert = Array.from(selectedItemIds).map(itemId => ({
+        outreach_id: outreachId,
+        item_id: itemId,
+      }))
+      await supabase.from("business_outreach_items").insert(itemsToInsert)
     }
     
-    if (outreachId) {
-      // Update existing outreach record
-      await supabase.from("business_outreach").update(updateData).eq("id", outreachId)
-    } else {
-      // Create new outreach record
-      const { data: outreachData } = await supabase.from("business_outreach").insert({
-        ...updateData,
-        org_id: event.org_id,
-        event_id: event.id,
-        business_id: business.business.id,
-        round_number: 1,
-        is_latest: true,
-      }).select("id").single()
-      
-      outreachId = outreachData?.id
-    }
-    
-    // Sync selected items to business_outreach_items
-    if (outreachId) {
-      // Delete existing items for this outreach
-      await supabase.from("business_outreach_items").delete().eq("outreach_id", outreachId)
-      
-      // Insert new selected items
-      if (selectedItemIds.size > 0) {
-        const itemsToInsert = Array.from(selectedItemIds).map(itemId => ({
-          outreach_id: outreachId,
-          item_id: itemId,
-        }))
-        await supabase.from("business_outreach_items").insert(itemsToInsert)
-      }
-    }
+    // Step 2: Create new record for next round (fresh slate)
+    await supabase.from("business_outreach").insert({
+      org_id: event.org_id,
+      event_id: event.id,
+      business_id: business.business.id,
+      contact_id: selectedContactId,
+      status: "not_contacted",
+      round_number: currentRoundNumber + 1,
+      is_latest: true,
+      // All email content columns are null - fresh start
+    })
     
     // Update items.status to "contacted" for all selected items
     if (selectedItemIds.size > 0) {
@@ -1239,15 +1293,16 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
         .in("id", selectedItemIdsArray)
     }
     
-    setStatus("contacted")
     setMarkingAsSent(false)
     setShowSentConfirm(false)
     
     toast({
       title: "Marked as sent",
-      description: `Email sent using ${tone} tone. ${selectedItemIds.size} item(s) updated.`,
+      description: `Email sent using ${tone} tone. Round ${currentRoundNumber + 1} is now ready.`,
     })
     
+    // Close the panel - user should reopen to see fresh state
+    onOpenChange(false)
     onUpdate()
   }
 
