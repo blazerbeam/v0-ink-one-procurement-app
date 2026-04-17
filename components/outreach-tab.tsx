@@ -86,6 +86,7 @@ interface OutreachBusiness {
   outreach: BusinessOutreach | null
   contacts: Contact[]
   outreachHistory?: BusinessOutreach[]
+  hasUnaskedNeededItems?: boolean
 }
 
 const loadingMessages = [
@@ -177,15 +178,39 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
         contactsMap.get(c.business_id)!.push(c as Contact)
       })
 
+      // Get all business_outreach_items for this event to determine which items have been asked
+      const allOutreachIds = allOutreachData?.map(o => o.id) || []
+      let askedItemIds = new Set<string>()
+      
+      if (allOutreachIds.length > 0) {
+        const { data: askedItemsData } = await supabase
+          .from("business_outreach_items")
+          .select("item_id")
+          .in("outreach_id", allOutreachIds)
+        
+        askedItemIds = new Set(askedItemsData?.map(ai => ai.item_id) || [])
+      }
+
       // Build outreach business list and sort alphabetically by name
       const outreachBusinesses: OutreachBusiness[] = (businessesData || [])
-        .map(business => ({
-          business: business as Business,
-          items: items.filter(i => i.business_id === business.id),
-          outreach: outreachMap.get(business.id) || null,
-          contacts: contactsMap.get(business.id) || [],
-          outreachHistory: historyMap.get(business.id) || [],
-        }))
+        .map(business => {
+          const businessItems = items.filter(i => i.business_id === business.id)
+          const outreachHistory = historyMap.get(business.id) || []
+          
+          // Check for unasked needed items: items that are "needed" and not in any outreach ask
+          const neededItems = businessItems.filter(i => i.status === "needed")
+          const unaskedNeededItems = neededItems.filter(i => !askedItemIds.has(i.id))
+          const hasUnaskedNeededItems = unaskedNeededItems.length > 0
+          
+          return {
+            business: business as Business,
+            items: businessItems,
+            outreach: outreachMap.get(business.id) || null,
+            contacts: contactsMap.get(business.id) || [],
+            outreachHistory,
+            hasUnaskedNeededItems,
+          }
+        })
         .sort((a, b) => a.business.name.localeCompare(b.business.name))
 
       // Fetch all org businesses for the add dialog
@@ -586,9 +611,12 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredBusinesses.map(({ business, items: businessItems, outreach, contacts, outreachHistory }) => {
+          {filteredBusinesses.map(({ business, items: businessItems, outreach, contacts, outreachHistory, hasUnaskedNeededItems }) => {
             const hasGenerated = hasGeneratedEmails(outreach)
             const hasDrafts = hasSavedDrafts(outreach)
+            const derivedStatus = getDerivedStatus(outreachHistory)
+            // Show "New Items" badge when business has been contacted but has unasked needed items
+            const showNewItemsBadge = hasUnaskedNeededItems && derivedStatus !== "not_contacted"
             
             return (
             <Card
@@ -639,7 +667,14 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="flex flex-col items-end gap-1">
-                    {getStatusBadge(outreach, outreachHistory)}
+                    <div className="flex items-center gap-1.5">
+                      {getStatusBadge(outreach, outreachHistory)}
+                      {showNewItemsBadge && (
+                        <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                          New Items
+                        </Badge>
+                      )}
+                    </div>
                     {outreach?.last_contacted_at && (
                       <span className="text-xs text-muted-foreground">
                         {formatDate(outreach.last_contacted_at)}
