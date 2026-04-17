@@ -5,8 +5,10 @@ import useSWR from "swr"
 import {
   Building2,
   Check,
+  ChevronDown,
   ChevronRight,
   Copy,
+  History,
   Mail,
   Pencil,
   Plus,
@@ -102,6 +104,12 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
   const [sheetOpen, setSheetOpen] = useState(false)
   const [historySheetOpen, setHistorySheetOpen] = useState(false)
   const [historyBusiness, setHistoryBusiness] = useState<OutreachBusiness | null>(null)
+  const [historyData, setHistoryData] = useState<{
+    outreach: BusinessOutreach
+    items: { id: string; name: string }[]
+  }[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [expandedRound, setExpandedRound] = useState<string | null>(null)
   const [addBusinessOpen, setAddBusinessOpen] = useState(false)
   const [preSelectItemIdForSheet, setPreSelectItemIdForSheet] = useState<string | null>(null)
 
@@ -255,10 +263,58 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
     setSheetOpen(true)
   }
 
-  const handleOpenHistorySheet = (e: React.MouseEvent, business: OutreachBusiness) => {
+  const handleOpenHistorySheet = async (e: React.MouseEvent, business: OutreachBusiness) => {
     e.stopPropagation()
     setHistoryBusiness(business)
     setHistorySheetOpen(true)
+    setHistoryLoading(true)
+    setExpandedRound(null)
+    
+    const supabase = createClient()
+    
+    // Fetch all outreach records for this business + event, ordered by round_number
+    const { data: outreachRecords } = await supabase
+      .from("business_outreach")
+      .select("*")
+      .eq("event_id", eventId)
+      .eq("business_id", business.business.id)
+      .order("round_number", { ascending: true })
+    
+    if (!outreachRecords || outreachRecords.length === 0) {
+      setHistoryData([])
+      setHistoryLoading(false)
+      return
+    }
+    
+    // Fetch items for each outreach record
+    const outreachIds = outreachRecords.map(o => o.id)
+    const { data: outreachItems } = await supabase
+      .from("business_outreach_items")
+      .select("outreach_id, item_id")
+      .in("outreach_id", outreachIds)
+    
+    // Get all unique item IDs and fetch their names
+    const itemIds = [...new Set(outreachItems?.map(oi => oi.item_id) || [])]
+    const { data: itemsData } = await supabase
+      .from("items")
+      .select("id, name")
+      .in("id", itemIds)
+    
+    const itemsMap = new Map(itemsData?.map(i => [i.id, i.name]) || [])
+    
+    // Build history data with items for each round
+    const history = outreachRecords.map(outreach => {
+      const roundItemIds = outreachItems?.filter(oi => oi.outreach_id === outreach.id).map(oi => oi.item_id) || []
+      const roundItems = roundItemIds.map(id => ({ id, name: itemsMap.get(id) || "Unknown Item" }))
+      
+      return {
+        outreach: outreach as BusinessOutreach,
+        items: roundItems,
+      }
+    })
+    
+    setHistoryData(history)
+    setHistoryLoading(false)
   }
 
   const handleAddBusiness = async (businessId: string) => {
@@ -553,25 +609,157 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
         preSelectItemId={preSelectItemIdForSheet}
       />
 
-      {/* History Sheet (Coming Soon) */}
+      {/* History Sheet */}
       <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
         <SheetContent className="w-[520px] sm:max-w-[520px] flex flex-col">
           <SheetHeader className="border-b pb-4">
             <SheetTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
+              <History className="h-5 w-5" />
               {historyBusiness?.business.name} - History
             </SheetTitle>
             <SheetDescription>
-              View outreach history for this business
+              View all outreach rounds for this business
             </SheetDescription>
           </SheetHeader>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center space-y-2">
-              <p className="text-lg font-medium text-muted-foreground">Coming soon</p>
-              <p className="text-sm text-muted-foreground">
-                Outreach history will be available here.
-              </p>
-            </div>
+          <div className="flex-1 overflow-y-auto py-4">
+            {historyLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => (
+                  <Skeleton key={i} className="h-20" />
+                ))}
+              </div>
+            ) : historyData.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center py-12">
+                <div className="text-center space-y-2">
+                  <p className="text-muted-foreground">No outreach history yet.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Generate an email to start tracking outreach.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {historyData.map(({ outreach, items: roundItems }) => {
+                  const isExpanded = expandedRound === outreach.id
+                  const o = outreach as BusinessOutreach & {
+                    generated_subject_professional?: string | null
+                    generated_body_professional?: string | null
+                    generated_subject_friendly?: string | null
+                    generated_body_friendly?: string | null
+                    generated_subject_enthusiastic?: string | null
+                    generated_body_enthusiastic?: string | null
+                    generated_subject_parent?: string | null
+                    generated_body_parent?: string | null
+                  }
+                  
+                  // Collect all generated tones
+                  const generatedTones: { tone: string; subject: string; body: string }[] = []
+                  if (o.generated_body_professional) {
+                    generatedTones.push({ tone: "Professional", subject: o.generated_subject_professional || "", body: o.generated_body_professional })
+                  }
+                  if (o.generated_body_friendly) {
+                    generatedTones.push({ tone: "Friendly", subject: o.generated_subject_friendly || "", body: o.generated_body_friendly })
+                  }
+                  if (o.generated_body_enthusiastic) {
+                    generatedTones.push({ tone: "Enthusiastic", subject: o.generated_subject_enthusiastic || "", body: o.generated_body_enthusiastic })
+                  }
+                  if (o.generated_body_parent) {
+                    generatedTones.push({ tone: "Parent-to-Parent", subject: o.generated_subject_parent || "", body: o.generated_body_parent })
+                  }
+                  
+                  const statusBadge = (status: string) => {
+                    switch (status) {
+                      case "contacted":
+                        return <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">Contacted</Badge>
+                      case "confirmed":
+                        return <Badge variant="secondary" className="text-xs bg-teal-100 text-teal-700">Confirmed</Badge>
+                      case "declined":
+                        return <Badge variant="secondary" className="text-xs bg-red-100 text-red-700">Declined</Badge>
+                      default:
+                        return <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-700">Not Contacted</Badge>
+                    }
+                  }
+                  
+                  return (
+                    <Card key={outreach.id} className="overflow-hidden">
+                      <button
+                        onClick={() => setExpandedRound(isExpanded ? null : outreach.id)}
+                        className="w-full p-4 text-left hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-muted font-medium">
+                              Round {outreach.round_number}
+                            </Badge>
+                            {outreach.is_latest && (
+                              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">Current</Badge>
+                            )}
+                            {statusBadge(outreach.status)}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {outreach.last_contacted_at
+                                ? new Date(outreach.last_contacted_at).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })
+                                : new Date(outreach.created_at).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })}
+                            </span>
+                            <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                          </div>
+                        </div>
+                        
+                        {/* Items included */}
+                        {roundItems.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {roundItems.map(item => (
+                              <Badge key={item.id} variant="outline" className="text-xs bg-muted/50">
+                                {item.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </button>
+                      
+                      {/* Expanded content - show generated emails */}
+                      {isExpanded && (
+                        <div className="border-t bg-gray-50 p-4 space-y-4">
+                          {generatedTones.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center">
+                              No emails were generated for this round.
+                            </p>
+                          ) : (
+                            generatedTones.map(({ tone, subject, body }) => (
+                              <div key={tone} className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="secondary" className="text-xs">{tone}</Badge>
+                                  <span className="text-xs text-muted-foreground">Read only</span>
+                                </div>
+                                <div className="space-y-2 bg-white border rounded-lg p-3">
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Subject</Label>
+                                    <p className="text-sm">{subject}</p>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Body</Label>
+                                    <p className="text-sm whitespace-pre-wrap max-h-[200px] overflow-y-auto">{body}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>
@@ -651,9 +839,19 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
         setSelectedItemIds(new Set(neededItems.map(i => i.id)))
       }
       
-      // Load saved emails if they exist
+      // Load saved emails if they exist on the CURRENT outreach record
+      // Important: We must check that the outreach record has actual email content
+      // A new outreach record (new round) will have null/empty email fields
       if (business.outreach) {
         const o = business.outreach as BusinessOutreach & {
+          generated_subject_professional?: string | null
+          generated_body_professional?: string | null
+          generated_subject_friendly?: string | null
+          generated_body_friendly?: string | null
+          generated_subject_enthusiastic?: string | null
+          generated_body_enthusiastic?: string | null
+          generated_subject_parent?: string | null
+          generated_body_parent?: string | null
           edited_subject_professional?: string | null
           edited_body_professional?: string | null
           edited_subject_friendly?: string | null
@@ -664,34 +862,50 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
           edited_body_parent?: string | null
         }
         
-        // Load generated emails
-        if (o.generated_body_professional || o.generated_body_friendly || o.generated_body_enthusiastic || o.generated_body_parent) {
+        // Check if THIS outreach record has any generated content
+        const hasGeneratedContent = !!(
+          o.generated_body_professional || 
+          o.generated_body_friendly || 
+          o.generated_body_enthusiastic || 
+          o.generated_body_parent
+        )
+        
+        if (hasGeneratedContent) {
+          // Load generated emails from this record
           setEmails({
             professional: { subject: o.generated_subject_professional || "", body: o.generated_body_professional || "" },
             friendly: { subject: o.generated_subject_friendly || "", body: o.generated_body_friendly || "" },
             enthusiastic: { subject: o.generated_subject_enthusiastic || "", body: o.generated_body_enthusiastic || "" },
             parent: { subject: o.generated_subject_parent || "", body: o.generated_body_parent || "" },
           })
+          
+          // Load per-tone edited versions only if generated content exists
+          setEditedEmails({
+            professional: (o.edited_subject_professional || o.edited_body_professional)
+              ? { subject: o.edited_subject_professional || "", body: o.edited_body_professional || "" }
+              : null,
+            friendly: (o.edited_subject_friendly || o.edited_body_friendly)
+              ? { subject: o.edited_subject_friendly || "", body: o.edited_body_friendly || "" }
+              : null,
+            enthusiastic: (o.edited_subject_enthusiastic || o.edited_body_enthusiastic)
+              ? { subject: o.edited_subject_enthusiastic || "", body: o.edited_body_enthusiastic || "" }
+              : null,
+            parent: (o.edited_subject_parent || o.edited_body_parent)
+              ? { subject: o.edited_subject_parent || "", body: o.edited_body_parent || "" }
+              : null,
+          })
         } else {
+          // This outreach record has no generated content - start fresh
           setEmails(null)
+          setEditedEmails({
+            professional: null,
+            friendly: null,
+            enthusiastic: null,
+            parent: null,
+          })
         }
-        
-        // Load per-tone edited versions
-        setEditedEmails({
-          professional: (o.edited_subject_professional || o.edited_body_professional)
-            ? { subject: o.edited_subject_professional || "", body: o.edited_body_professional || "" }
-            : null,
-          friendly: (o.edited_subject_friendly || o.edited_body_friendly)
-            ? { subject: o.edited_subject_friendly || "", body: o.edited_body_friendly || "" }
-            : null,
-          enthusiastic: (o.edited_subject_enthusiastic || o.edited_body_enthusiastic)
-            ? { subject: o.edited_subject_enthusiastic || "", body: o.edited_body_enthusiastic || "" }
-            : null,
-          parent: (o.edited_subject_parent || o.edited_body_parent)
-            ? { subject: o.edited_subject_parent || "", body: o.edited_body_parent || "" }
-            : null,
-        })
       } else {
+        // No outreach record at all - start fresh
         setEmails(null)
         setEditedEmails({
           professional: null,
