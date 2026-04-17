@@ -502,7 +502,7 @@ export function EditItemSheet({
                     <PopoverContent className="w-[200px] p-0" align="start">
                       <Command>
                         <CommandInput placeholder="Search businesses..." />
-                        <CommandList>
+                        <CommandList className="max-h-[240px] overflow-y-auto">
                           <CommandEmpty>No business found.</CommandEmpty>
                           <CommandGroup>
                             {formData.business_id !== "none" && (
