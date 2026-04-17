@@ -220,6 +220,33 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
     }
   }, [preSelectedItemId, businesses, items])
 
+  // Helper to derive best status from all rounds for a business
+  const getDerivedStatus = (outreachHistory?: BusinessOutreach[]): string => {
+    const statusPriority: Record<string, number> = {
+      confirmed: 6,
+      received: 5,
+      fulfilled: 4,
+      contacted: 3,
+      not_contacted: 2,
+      declined: 1,
+    }
+    
+    if (!outreachHistory || outreachHistory.length === 0) return "not_contacted"
+    
+    let bestStatus = "not_contacted"
+    let bestPriority = 0
+    
+    for (const round of outreachHistory) {
+      const priority = statusPriority[round.status] || 0
+      if (priority > bestPriority) {
+        bestPriority = priority
+        bestStatus = round.status
+      }
+    }
+    
+    return bestStatus
+  }
+  
   // Filter businesses
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
@@ -232,29 +259,42 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
       if (!matchesName) return false
     }
     
-    // Apply status filter
+    // Derive status from all rounds
+    const derivedStatus = getDerivedStatus(b.outreachHistory)
+    
+    // Apply status filter using derived status
     if (filter === "all") return true
     if (filter === "not_contacted") {
-      return !b.outreach || b.outreach.status === "not_contacted"
+      return derivedStatus === "not_contacted"
     }
     if (filter === "contacted") {
-      return b.outreach?.status === "contacted"
+      return derivedStatus === "contacted"
     }
     if (filter === "needs_follow_up") {
-      if (!b.outreach || b.outreach.status !== "contacted") return false
-      if (!b.outreach.last_contacted_at) return true
-      return new Date(b.outreach.last_contacted_at) < sevenDaysAgo
+      if (derivedStatus !== "contacted") return false
+      // Find the most recent last_contacted_at from any round
+      const lastContacted = b.outreachHistory
+        ?.filter(r => r.last_contacted_at)
+        .map(r => new Date(r.last_contacted_at!))
+        .sort((a, d) => d.getTime() - a.getTime())[0]
+      if (!lastContacted) return true
+      return lastContacted < sevenDaysAgo
     }
     return true
   })
 
-  // Count for filters
-  const notContactedCount = businesses.filter(b => !b.outreach || b.outreach.status === "not_contacted").length
-  const contactedCount = businesses.filter(b => b.outreach?.status === "contacted").length
+  // Count for filters using derived status
+  const notContactedCount = businesses.filter(b => getDerivedStatus(b.outreachHistory) === "not_contacted").length
+  const contactedCount = businesses.filter(b => getDerivedStatus(b.outreachHistory) === "contacted").length
   const needsFollowUpCount = businesses.filter(b => {
-    if (!b.outreach || b.outreach.status !== "contacted") return false
-    if (!b.outreach.last_contacted_at) return true
-    return new Date(b.outreach.last_contacted_at) < sevenDaysAgo
+    const derivedStatus = getDerivedStatus(b.outreachHistory)
+    if (derivedStatus !== "contacted") return false
+    const lastContacted = b.outreachHistory
+      ?.filter(r => r.last_contacted_at)
+      .map(r => new Date(r.last_contacted_at!))
+      .sort((a, d) => d.getTime() - a.getTime())[0]
+    if (!lastContacted) return true
+    return lastContacted < sevenDaysAgo
   }).length
 
   const handleOpenSheet = (business: OutreachBusiness, preSelectItemId?: string) => {
@@ -339,17 +379,49 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
     b => !businesses.some(ob => ob.business.id === b.id)
   )
 
-  const getStatusBadge = (outreach: BusinessOutreach | null) => {
-    if (!outreach || outreach.status === "not_contacted") {
+  // Derive the best status from all outreach rounds for display on the business row
+  // Priority: confirmed > received > fulfilled > contacted > not_contacted > declined
+  const getStatusBadge = (outreach: BusinessOutreach | null, outreachHistory?: BusinessOutreach[]) => {
+    const statusPriority: Record<string, number> = {
+      confirmed: 6,
+      received: 5,
+      fulfilled: 4,
+      contacted: 3,
+      not_contacted: 2,
+      declined: 1,
+    }
+    
+    // Get all statuses from history (includes current record)
+    const allRounds = outreachHistory || (outreach ? [outreach] : [])
+    
+    // Find the highest priority status across all rounds
+    let bestStatus = "not_contacted"
+    let bestPriority = 0
+    
+    for (const round of allRounds) {
+      const priority = statusPriority[round.status] || 0
+      if (priority > bestPriority) {
+        bestPriority = priority
+        bestStatus = round.status
+      }
+    }
+    
+    if (bestStatus === "not_contacted") {
       return <Badge variant="secondary" className="bg-gray-100 text-gray-700 border-gray-200">Not Contacted</Badge>
     }
-    if (outreach.status === "contacted") {
+    if (bestStatus === "contacted") {
       return <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200">Contacted</Badge>
     }
-    if (outreach.status === "confirmed") {
+    if (bestStatus === "confirmed") {
       return <Badge variant="secondary" className="bg-teal-100 text-teal-700 border-teal-200">Confirmed</Badge>
     }
-    if (outreach.status === "declined") {
+    if (bestStatus === "received") {
+      return <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200">Received</Badge>
+    }
+    if (bestStatus === "fulfilled") {
+      return <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">Fulfilled</Badge>
+    }
+    if (bestStatus === "declined") {
       return <Badge variant="secondary" className="bg-red-100 text-red-700 border-red-200">Declined</Badge>
     }
     return null
@@ -567,7 +639,7 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="flex flex-col items-end gap-1">
-                    {getStatusBadge(outreach)}
+                    {getStatusBadge(outreach, outreachHistory)}
                     {outreach?.last_contacted_at && (
                       <span className="text-xs text-muted-foreground">
                         {formatDate(outreach.last_contacted_at)}
