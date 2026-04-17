@@ -45,6 +45,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Trash2, Plus, Check, ChevronsUpDown } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 interface EditItemSheetProps {
   item: Item | null
@@ -65,6 +66,7 @@ export function EditItemSheet({
   onOpenChange,
   onUpdate,
 }: EditItemSheetProps) {
+  const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -383,17 +385,9 @@ export function EditItemSheet({
     if (!item || !formData.name.trim()) return
 
     setIsSubmitting(true)
-    
-    console.log("[v0] handleSubmit called for item:", item.id)
-    console.log("[v0] formData.status:", formData.status)
-    console.log("[v0] original item.status:", item.status)
 
-    // Get owner name from volunteer if selected
+    // Get owner ID from volunteer if selected
     const ownerId = formData.owner_id !== "none" ? formData.owner_id : null
-    const selectedVolunteer = ownerId ? volunteers.find(v => v.id === ownerId) : null
-    const ownerName = selectedVolunteer
-      ? `${selectedVolunteer.first_name} ${selectedVolunteer.last_name}`
-      : null
     const packageId = formData.package_id !== "none" ? formData.package_id : null
     const businessId = formData.business_id !== "none" ? formData.business_id : null
     const contactId = formData.contact_id !== "none" ? formData.contact_id : null
@@ -409,31 +403,35 @@ export function EditItemSheet({
       estimated_value: formData.estimated_value ? Number(formData.estimated_value) : null,
       status: formData.status,
       owner_id: ownerId,
-      owner_name: ownerName,
+      // Note: owner_name is not a column in the items table
       package_id: packageId,
       notes: formData.notes.trim() || null,
     }
-    
-    console.log("[v0] update payload:", updatePayload)
 
     const supabase = createClient()
-    const { error, data } = await supabase
+    const { error } = await supabase
       .from("items")
       .update(updatePayload)
       .eq("id", item.id)
-      .select()
-
-    console.log("[v0] supabase update result - error:", error, "data:", data)
 
     setIsSubmitting(false)
 
-    if (!error) {
-      console.log("[v0] update successful, calling onUpdate")
-      onUpdate()
-      onOpenChange(false)
-    } else {
-      console.error("[v0] update failed:", error)
+    if (error) {
+      toast({
+        title: "Failed to save changes",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      })
+      return
     }
+    
+    toast({
+      title: "Item updated successfully",
+      description: `"${formData.name}" has been updated.`,
+    })
+    
+    onUpdate()
+    onOpenChange(false)
   }
 
   const handleDelete = async () => {
