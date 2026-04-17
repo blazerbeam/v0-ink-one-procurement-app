@@ -114,9 +114,12 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
   const [addBusinessOpen, setAddBusinessOpen] = useState(false)
   const [preSelectItemIdForSheet, setPreSelectItemIdForSheet] = useState<string | null>(null)
 
+  // Create a hash of item statuses to invalidate cache when items change
+  const itemsHash = items.map(i => `${i.id}:${i.status}`).sort().join(",")
+
   // Fetch outreach data
   const { data, isLoading, mutate } = useSWR(
-    `outreach-${eventId}`,
+    `outreach-${eventId}-${itemsHash}`,
     async () => {
       const supabase = createClient()
 
