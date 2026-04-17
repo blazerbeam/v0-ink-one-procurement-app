@@ -650,28 +650,44 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
                     generated_body_enthusiastic?: string | null
                     generated_subject_parent?: string | null
                     generated_body_parent?: string | null
+                    edited_subject_professional?: string | null
+                    edited_body_professional?: string | null
+                    edited_subject_friendly?: string | null
+                    edited_body_friendly?: string | null
+                    edited_subject_enthusiastic?: string | null
+                    edited_body_enthusiastic?: string | null
+                    edited_subject_parent?: string | null
+                    edited_body_parent?: string | null
                     sent_at?: string | null
                     sent_tone?: string | null
                   }
                   
                   // Only show email content for rounds that were actually sent
                   const wasSent = !!o.sent_at
+                  const sentTone = o.sent_tone
                   
-                  // Collect all generated tones (only for sent rounds)
-                  const generatedTones: { tone: string; subject: string; body: string }[] = []
+                  // Helper to get content for a tone, preferring edited over generated
+                  const getToneContent = (toneName: string, editedSubject: string | null | undefined, editedBody: string | null | undefined, genSubject: string | null | undefined, genBody: string | null | undefined) => {
+                    const subject = editedSubject || genSubject || ""
+                    const body = editedBody || genBody || ""
+                    if (!body) return null
+                    return { tone: toneName, subject, body }
+                  }
+                  
+                  // Collect all tones with content (only for sent rounds), preferring edited over generated
+                  const emailTones: { tone: string; subject: string; body: string }[] = []
                   if (wasSent) {
-                    if (o.generated_body_professional) {
-                      generatedTones.push({ tone: "Professional", subject: o.generated_subject_professional || "", body: o.generated_body_professional })
-                    }
-                    if (o.generated_body_friendly) {
-                      generatedTones.push({ tone: "Friendly", subject: o.generated_subject_friendly || "", body: o.generated_body_friendly })
-                    }
-                    if (o.generated_body_enthusiastic) {
-                      generatedTones.push({ tone: "Enthusiastic", subject: o.generated_subject_enthusiastic || "", body: o.generated_body_enthusiastic })
-                    }
-                    if (o.generated_body_parent) {
-                      generatedTones.push({ tone: "Parent-to-Parent", subject: o.generated_subject_parent || "", body: o.generated_body_parent })
-                    }
+                    const professional = getToneContent("professional", o.edited_subject_professional, o.edited_body_professional, o.generated_subject_professional, o.generated_body_professional)
+                    if (professional) emailTones.push(professional)
+                    
+                    const friendly = getToneContent("friendly", o.edited_subject_friendly, o.edited_body_friendly, o.generated_subject_friendly, o.generated_body_friendly)
+                    if (friendly) emailTones.push(friendly)
+                    
+                    const enthusiastic = getToneContent("enthusiastic", o.edited_subject_enthusiastic, o.edited_body_enthusiastic, o.generated_subject_enthusiastic, o.generated_body_enthusiastic)
+                    if (enthusiastic) emailTones.push(enthusiastic)
+                    
+                    const parent = getToneContent("parent", o.edited_subject_parent, o.edited_body_parent, o.generated_subject_parent, o.generated_body_parent)
+                    if (parent) emailTones.push(parent)
                   }
                   
                   const statusBadge = (status: string) => {
@@ -733,7 +749,7 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
                         )}
                       </button>
                       
-                      {/* Expanded content - show generated emails only for sent rounds */}
+                      {/* Expanded content - show emails only for sent rounds */}
                       {isExpanded && (
                         <div className="border-t bg-gray-50 p-4 space-y-4">
                           {!wasSent ? (
@@ -742,15 +758,22 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
                                 ? "This is the current round. Generate and send an email to see content here."
                                 : "This round was not sent."}
                             </p>
-                          ) : generatedTones.length === 0 ? (
+                          ) : emailTones.length === 0 ? (
                             <p className="text-sm text-muted-foreground text-center">
                               No emails were generated for this round.
                             </p>
                           ) : (
-                            generatedTones.map(({ tone, subject, body }) => (
-                              <div key={tone} className="space-y-2">
+                            emailTones.map(({ tone: toneKey, subject, body }) => {
+                              const toneLabel = toneKey === "parent" ? "Parent-to-Parent" : toneKey.charAt(0).toUpperCase() + toneKey.slice(1)
+                              const isSentTone = sentTone === toneKey
+                              
+                              return (
+                              <div key={toneKey} className="space-y-2">
                                 <div className="flex items-center gap-2">
-                                  <Badge variant="secondary" className="text-xs">{tone}</Badge>
+                                  <Badge variant="secondary" className="text-xs">{toneLabel}</Badge>
+                                  {isSentTone && (
+                                    <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">Sent</Badge>
+                                  )}
                                   <span className="text-xs text-muted-foreground">Read only</span>
                                 </div>
                                 <div className="space-y-2 bg-white border rounded-lg p-3">
@@ -764,7 +787,7 @@ export function OutreachTab({ eventId, event, items, preSelectedItemId, onPreSel
                                   </div>
                                 </div>
                               </div>
-                            ))
+                            )})
                           )}
                         </div>
                       )}
@@ -803,6 +826,7 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [showSentConfirm, setShowSentConfirm] = useState(false)
   const [markingAsSent, setMarkingAsSent] = useState(false)
+  const [sentToneSelection, setSentToneSelection] = useState<Tone>("professional")
   
   // Track original content to detect unsaved changes
   const [originalSubject, setOriginalSubject] = useState("")
@@ -1256,7 +1280,7 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
     // Step 1: Update current record - mark as sent and close the round
     await supabase.from("business_outreach").update({
       status: "contacted",
-      sent_tone: tone,
+      sent_tone: sentToneSelection,
       sent_at: now,
       last_contacted_at: now,
       is_latest: false, // Close this round
@@ -1298,12 +1322,17 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
     
     toast({
       title: "Marked as sent",
-      description: `Email sent using ${tone} tone. Round ${currentRoundNumber + 1} is now ready.`,
+      description: `Email sent using ${sentToneSelection} tone. Round ${currentRoundNumber + 1} is now ready.`,
     })
     
-    // Close the panel - user should reopen to see fresh state
+    // Close the panel first, then refresh the list
     onOpenChange(false)
-    onUpdate()
+    
+    // Force refresh the business outreach list to show updated status
+    // Small delay to ensure DB writes are committed before refetch
+    setTimeout(() => {
+      onUpdate()
+    }, 100)
   }
 
   // Sync working content when tone changes - load edited version if exists, otherwise generated
@@ -1598,7 +1627,10 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
 
               {/* Mark as Sent Button */}
               <Button 
-                onClick={() => setShowSentConfirm(true)} 
+                onClick={() => {
+                  setSentToneSelection(tone) // Default to current tone
+                  setShowSentConfirm(true)
+                }} 
                 className="w-full bg-blue-600 hover:bg-blue-700"
               >
                 <Mail className="mr-2 h-4 w-4" />
@@ -1652,10 +1684,25 @@ function OutreachSheet({ open, onOpenChange, business, event, onUpdate, preSelec
             <div className="space-y-3">
               <p>This will record that you sent the email and update the outreach status.</p>
               
-              <div className="bg-muted rounded-lg p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">Tone:</span>
-                  <Badge variant="secondary" className="capitalize">{tone}</Badge>
+              <div className="bg-muted rounded-lg p-3 space-y-3">
+                <div className="space-y-2">
+                  <span className="text-sm font-medium text-foreground">Which tone did you send?</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["professional", "friendly", "enthusiastic", "parent"] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setSentToneSelection(t)}
+                        className={`px-3 py-2 text-sm rounded-md border transition-colors ${
+                          sentToneSelection === t
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-background hover:bg-muted border-input"
+                        }`}
+                      >
+                        {t === "parent" ? "Parent-to-Parent" : t.charAt(0).toUpperCase() + t.slice(1)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 
                 {selectedItemIds.size > 0 && (
