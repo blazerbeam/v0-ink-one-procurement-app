@@ -28,6 +28,7 @@ export interface Business {
   category: string | null
   website: string | null
   notes: string | null
+  address: string | null
   created_at: string
 }
 
@@ -242,4 +243,45 @@ export const OUTREACH_STATUS_LABELS: Record<BusinessOutreachStatus, string> = {
   contacted: 'Contacted',
   confirmed: 'Confirmed',
   declined: 'Declined'
+}
+
+// In-Kind Donation Receipts
+export type ReceiptStatus = 'draft' | 'sent'
+
+export interface Receipt {
+  id: string
+  org_id: string
+  business_id: string
+  contact_id: string | null
+  status: ReceiptStatus
+  receipt_date: string
+  sent_at: string | null
+  // Snapshot fields for historical integrity
+  snapshot_org_name: string
+  snapshot_org_tax_id: string
+  snapshot_donor_name: string
+  snapshot_business_name: string
+  snapshot_business_address: string | null
+  snapshot_contact_email: string | null
+  body_text: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ReceiptItem {
+  id: string
+  receipt_id: string
+  item_id: string
+  snapshot_item_name: string
+  snapshot_estimated_value: number | null
+  created_at: string
+}
+
+export interface ReceiptWithItems extends Receipt {
+  items: ReceiptItem[]
+}
+
+export const RECEIPT_STATUS_LABELS: Record<ReceiptStatus, string> = {
+  draft: 'Draft',
+  sent: 'Sent'
 }
