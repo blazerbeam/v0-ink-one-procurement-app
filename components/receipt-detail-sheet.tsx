@@ -384,6 +384,15 @@ export function ReceiptDetailSheet({
               <div className="flex gap-2 w-full">
                 <Button
                   type="button"
+                  variant="destructive"
+                  onClick={() => setDeleteDialogOpen(true)}
+                  disabled={isSubmitting}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
+                <Button
+                  type="button"
                   variant="outline"
                   onClick={() => onOpenChange(false)}
                   className="flex-1"
@@ -439,9 +448,9 @@ export function ReceiptDetailSheet({
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Receipt</AlertDialogTitle>
+            <AlertDialogTitle>Delete this receipt?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this receipt? This action cannot be undone.
+              This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

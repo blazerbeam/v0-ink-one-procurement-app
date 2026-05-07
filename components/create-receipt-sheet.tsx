@@ -69,6 +69,8 @@ export function CreateReceiptSheet({
   const [calendarOpen, setCalendarOpen] = useState(false)
   // Track receipt ID for upsert pattern - null means new receipt, string means existing draft
   const [existingReceiptId, setExistingReceiptId] = useState<string | null>(null)
+  // Track dirty state for smart "Save as Draft" button
+  const [isDirty, setIsDirty] = useState(true) // true for new receipts (never saved)
 
   // Fetch org data for tax ID check
   const { data: org, isLoading: orgLoading } = useSWR<Org | null>(
@@ -121,6 +123,8 @@ export function CreateReceiptSheet({
       }
       // Reset existing receipt ID when opening fresh
       setExistingReceiptId(null)
+      // New receipts start dirty (need to be saved)
+      setIsDirty(true)
     }
   }, [open, business, contacts, items])
 
@@ -134,6 +138,7 @@ export function CreateReceiptSheet({
   // Update form when contact changes
   const handleContactChange = (contactId: string) => {
     setSelectedContactId(contactId)
+    setIsDirty(true)
     const contact = contacts.find((c) => c.id === contactId)
     if (contact) {
       setDonorName(
@@ -158,6 +163,7 @@ export function CreateReceiptSheet({
 
   // Toggle item selection
   const toggleItem = (itemId: string) => {
+    setIsDirty(true)
     setSelectedItemIds((prev) => {
       const next = new Set(prev)
       if (next.has(itemId)) {
@@ -278,11 +284,8 @@ export function CreateReceiptSheet({
         onReceiptCreated()
         onOpenChange(false)
       } else {
-        // Keep sheet open on draft save, show toast for 3 seconds
-        toast({
-          title: "Draft saved.",
-          duration: 3000,
-        })
+        // Keep sheet open on draft save, mark as saved (not dirty)
+        setIsDirty(false)
         onReceiptCreated()
         // Do NOT close the sheet - keep it open for continued editing
       }
@@ -438,6 +441,7 @@ export function CreateReceiptSheet({
                         if (date) {
                           setReceiptDate(date)
                           setCalendarOpen(false)
+                          setIsDirty(true)
                         }
                       }}
                       initialFocus
@@ -450,7 +454,7 @@ export function CreateReceiptSheet({
                 <FieldLabel>Donor Name</FieldLabel>
                 <Input
                   value={donorName}
-                  onChange={(e) => setDonorName(e.target.value)}
+                  onChange={(e) => { setDonorName(e.target.value); setIsDirty(true) }}
                   placeholder="John Doe"
                 />
               </Field>
@@ -459,7 +463,7 @@ export function CreateReceiptSheet({
                 <FieldLabel>Business Name</FieldLabel>
                 <Input
                   value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
+                  onChange={(e) => { setBusinessName(e.target.value); setIsDirty(true) }}
                   placeholder="Acme Corporation"
                 />
               </Field>
@@ -468,7 +472,7 @@ export function CreateReceiptSheet({
                 <FieldLabel>Address</FieldLabel>
                 <Textarea
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                  onChange={(e) => { setAddress(e.target.value); setIsDirty(true) }}
                   placeholder="123 Main St, City, State 12345"
                   rows={2}
                 />
@@ -479,7 +483,7 @@ export function CreateReceiptSheet({
                 <Input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => { setEmail(e.target.value); setIsDirty(true) }}
                   placeholder="contact@example.com"
                 />
               </Field>
@@ -514,12 +518,16 @@ export function CreateReceiptSheet({
             <Button
               type="button"
               variant="outline"
-              disabled={!canCreateReceipt || isSubmitting}
+              disabled={!canCreateReceipt || isSubmitting || !isDirty}
               onClick={() => handleSave(false)}
-              className="flex-1"
+              className={cn("flex-1", !isDirty && "bg-muted text-muted-foreground")}
             >
-              {isSubmitting ? <Spinner className="mr-2" /> : null}
-              Save as Draft
+              {isSubmitting ? (
+                <Spinner className="mr-2" />
+              ) : !isDirty ? (
+                <Check className="mr-2 h-4 w-4" />
+              ) : null}
+              {isDirty ? "Save as Draft" : "Saved"}
             </Button>
             <Button
               type="button"
