@@ -19,6 +19,10 @@ export async function GET(
   try {
     const supabase = await createClient()
 
+    // Get current authenticated user for signature
+    const { data: { user } } = await supabase.auth.getUser()
+    const signerName = user?.user_metadata?.full_name || user?.email || "Authorized Representative"
+
     // Fetch receipt with items
     const { data: receipt, error: receiptError } = await supabase
       .from("receipts")
@@ -46,46 +50,45 @@ export async function GET(
       )
     }
 
-    // Calculate total value
-    const totalValue = (items || []).reduce(
-      (sum: number, item: { snapshot_estimated_value: number | null }) =>
-        sum + (item.snapshot_estimated_value || 0),
-      0
-    )
+    // Format the receipt date as M/D/YYYY
+    const formattedDate = format(new Date(receipt.receipt_date), "M/d/yyyy")
 
-    // Format the receipt date
-    const formattedDate = format(new Date(receipt.receipt_date), "MMMM d, yyyy")
-
-    // Build the document
+    // Build the document with exact spec format
     const doc = new Document({
       sections: [
         {
           properties: {},
           children: [
-            // Organization name header (centered, bold)
+            // Organization name header (centered, bold, larger font - Heading 1)
             new Paragraph({
               children: [
                 new TextRun({
                   text: receipt.snapshot_org_name,
                   bold: true,
-                  size: 32, // 16pt
+                  size: 36, // 18pt
                 }),
               ],
+              heading: HeadingLevel.HEADING_1,
               alignment: AlignmentType.CENTER,
-              spacing: { after: 100 },
+              spacing: { after: 120 },
             }),
 
-            // "In-Kind Donation Receipt" subheader
+            // "In-Kind Donation Receipt" subheader (centered, smaller, gray - Heading 3)
             new Paragraph({
               children: [
                 new TextRun({
                   text: "In-Kind Donation Receipt",
-                  size: 24, // 12pt
+                  size: 22, // 11pt
+                  color: "666666",
                 }),
               ],
+              heading: HeadingLevel.HEADING_3,
               alignment: AlignmentType.CENTER,
               spacing: { after: 400 },
             }),
+
+            // Blank line
+            new Paragraph({ children: [] }),
 
             // Date line
             new Paragraph({
@@ -95,153 +98,128 @@ export async function GET(
                   size: 22,
                 }),
               ],
-              spacing: { after: 200 },
+              spacing: { after: 400 },
             }),
 
-            // Recipient info
+            // Blank line
+            new Paragraph({ children: [] }),
+
+            // Donor info
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Received from:",
-                  bold: true,
-                  size: 22,
-                }),
-              ],
-              spacing: { after: 100 },
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: receipt.snapshot_donor_name,
+                  text: `Donor Name: ${receipt.snapshot_donor_name}`,
                   size: 22,
                 }),
               ],
             }),
-            ...(receipt.snapshot_business_name
-              ? [
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: receipt.snapshot_business_name,
-                        size: 22,
-                      }),
-                    ],
-                  }),
-                ]
-              : []),
-            ...(receipt.snapshot_business_address
-              ? [
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: receipt.snapshot_business_address,
-                        size: 22,
-                      }),
-                    ],
-                  }),
-                ]
-              : []),
-            ...(receipt.snapshot_contact_email
-              ? [
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: receipt.snapshot_contact_email,
-                        size: 22,
-                      }),
-                    ],
-                    spacing: { after: 300 },
-                  }),
-                ]
-              : [
-                  new Paragraph({
-                    children: [],
-                    spacing: { after: 300 },
-                  }),
-                ]),
-
-            // Acknowledgment paragraph
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `This letter acknowledges the generous in-kind donation received from ${receipt.snapshot_donor_name}${receipt.snapshot_business_name ? ` on behalf of ${receipt.snapshot_business_name}` : ""} on ${formattedDate}.`,
+                  text: `Business Name (if applicable): ${receipt.snapshot_business_name || ""}`,
                   size: 22,
                 }),
               ],
-              spacing: { after: 300 },
             }),
-
-            // Items header
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Items donated:",
-                  bold: true,
+                  text: `Address: ${receipt.snapshot_business_address || ""}`,
                   size: 22,
                 }),
               ],
-              spacing: { after: 100 },
             }),
 
-            // Item list
-            ...(items || []).map(
-              (item: {
-                snapshot_item_name: string
-                snapshot_estimated_value: number | null
-              }) => {
-                const valueStr = item.snapshot_estimated_value
-                  ? ` (estimated value: $${item.snapshot_estimated_value.toLocaleString()})`
-                  : ""
-                return new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: `• ${item.snapshot_item_name}${valueStr}`,
-                      size: 22,
-                    }),
-                  ],
-                  indent: { left: 360 }, // 0.25 inch
-                })
-              }
-            ),
+            // Blank line
+            new Paragraph({ children: [] }),
 
-            // Total value
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Total estimated value: $${totalValue.toLocaleString()}`,
-                  bold: true,
+                  text: `Email: ${receipt.snapshot_contact_email || ""}`,
                   size: 22,
-                }),
-              ],
-              spacing: { before: 300, after: 300 },
-            }),
-
-            // No goods/services disclaimer
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: "No goods or services were provided in exchange for this donation.",
-                  size: 22,
-                  italics: true,
                 }),
               ],
               spacing: { after: 400 },
             }),
 
-            // Organization signature block
+            // Blank line
+            new Paragraph({ children: [] }),
+
+            // Thank you paragraph with tax info
             new Paragraph({
               children: [
                 new TextRun({
-                  text: receipt.snapshot_org_name,
-                  bold: true,
+                  text: `Thank you for your generous in-kind donation to the ${receipt.snapshot_org_name}, a 501(c)(3) charitable organization. Tax ID: ${receipt.snapshot_org_tax_id}. This letter serves as your record for tax purposes. ${receipt.snapshot_org_name} did not provide any goods or services in exchange for this donation.`,
+                  size: 22,
+                }),
+              ],
+              spacing: { after: 400 },
+            }),
+
+            // Blank line
+            new Paragraph({ children: [] }),
+
+            // Items header
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "Description of Donated Item(s):",
+                  size: 22,
+                }),
+              ],
+              spacing: { after: 200 },
+            }),
+
+            // Blank line
+            new Paragraph({ children: [] }),
+
+            // Item list - NO dollar values, just names
+            ...(items || []).map(
+              (item: { snapshot_item_name: string }) => {
+                return new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `- ${item.snapshot_item_name}`,
+                      size: 22,
+                    }),
+                  ],
+                })
+              }
+            ),
+
+            // Blank line
+            new Paragraph({ children: [], spacing: { after: 400 } }),
+
+            // Sincerely
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "Sincerely,",
+                  size: 22,
+                }),
+              ],
+              spacing: { after: 400 },
+            }),
+
+            // Blank line for signature space
+            new Paragraph({ children: [] }),
+
+            // Signer name
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: signerName,
                   size: 22,
                 }),
               ],
             }),
+
+            // Organization name
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `EIN: ${receipt.snapshot_org_tax_id}`,
+                  text: receipt.snapshot_org_name,
                   size: 22,
                 }),
               ],

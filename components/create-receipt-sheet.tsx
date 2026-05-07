@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -68,6 +67,8 @@ export function CreateReceiptSheet({
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set())
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [calendarOpen, setCalendarOpen] = useState(false)
+  // Track receipt ID for upsert pattern - null means new receipt, string means existing draft
+  const [existingReceiptId, setExistingReceiptId] = useState<string | null>(null)
 
   // Fetch org data for tax ID check
   const { data: org, isLoading: orgLoading } = useSWR<Org | null>(
@@ -118,6 +119,8 @@ export function CreateReceiptSheet({
       if (items) {
         setSelectedItemIds(new Set(items.map((i) => i.id)))
       }
+      // Reset existing receipt ID when opening fresh
+      setExistingReceiptId(null)
     }
   }, [open, business, contacts, items])
 
@@ -166,33 +169,27 @@ export function CreateReceiptSheet({
     })
   }
 
-  // Calculate total value
-  const totalValue = useMemo(() => {
-    if (!items) return 0
-    return items
-      .filter((item) => selectedItemIds.has(item.id))
-      .reduce((sum, item) => sum + (item.estimated_value || 0), 0)
-  }, [items, selectedItemIds])
-
-  // Generate preview body text
-  const generateBodyText = () => {
+  // Generate preview body text - matches exact .docx format
+  const generatePreviewText = () => {
     const selectedItems = items?.filter((item) => selectedItemIds.has(item.id)) || []
-    const formattedDate = format(receiptDate, "MMMM d, yyyy")
+    const formattedDate = format(receiptDate, "M/d/yyyy")
+    const orgName = org?.legal_name || org?.name || "Organization"
     
-    let body = `This letter acknowledges the generous in-kind donation received from ${donorName}${businessName ? ` on behalf of ${businessName}` : ""} on ${formattedDate}.\n\n`
-    body += `Items donated:\n`
+    let body = `Date: ${formattedDate}\n\n`
+    body += `Donor Name: ${donorName}\n`
+    body += `Business Name (if applicable): ${businessName}\n`
+    body += `Address: ${address || ""}\n\n`
+    body += `Email: ${email || ""}\n\n`
+    body += `Thank you for your generous in-kind donation to the ${orgName}, a 501(c)(3) charitable organization. Tax ID: ${org?.tax_id || "N/A"}. This letter serves as your record for tax purposes. ${orgName} did not provide any goods or services in exchange for this donation.\n\n`
+    body += `Description of Donated Item(s):\n\n`
     
     selectedItems.forEach((item) => {
-      const valueStr = item.estimated_value
-        ? ` (estimated value: $${item.estimated_value.toLocaleString()})`
-        : ""
-      body += `- ${item.name}${valueStr}\n`
+      body += `- ${item.name}\n`
     })
     
-    body += `\nTotal estimated value: $${totalValue.toLocaleString()}\n\n`
-    body += `No goods or services were provided in exchange for this donation.\n\n`
-    body += `${org?.legal_name || org?.name || "Organization"}\n`
-    body += `EIN: ${org?.tax_id || "N/A"}`
+    body += `\nSincerely,\n\n`
+    body += `[Your Name]\n`
+    body += orgName
     
     return body
   }
@@ -206,35 +203,60 @@ export function CreateReceiptSheet({
 
     setIsSubmitting(true)
     try {
-      const bodyText = generateBodyText()
+      const bodyText = generatePreviewText()
       const selectedItems = items?.filter((item) => selectedItemIds.has(item.id)) || []
 
-      // Insert receipt
-      const { data: receipt, error: receiptError } = await supabase
-        .from("receipts")
-        .insert({
-          org_id: orgId,
-          business_id: business.id,
-          contact_id: selectedContactId || null,
-          status: andDownload ? "sent" : "draft",
-          receipt_date: format(receiptDate, "yyyy-MM-dd"),
-          sent_at: andDownload ? new Date().toISOString() : null,
-          snapshot_org_name: org?.legal_name || org?.name || "",
-          snapshot_org_tax_id: org?.tax_id || "",
-          snapshot_donor_name: donorName,
-          snapshot_business_name: businessName,
-          snapshot_business_address: address || null,
-          snapshot_contact_email: email || null,
-          body_text: bodyText,
-        })
-        .select()
-        .single()
+      const receiptData = {
+        org_id: orgId,
+        business_id: business.id,
+        contact_id: selectedContactId || null,
+        status: andDownload ? "sent" : "draft",
+        receipt_date: format(receiptDate, "yyyy-MM-dd"),
+        sent_at: andDownload ? new Date().toISOString() : null,
+        snapshot_org_name: org?.legal_name || org?.name || "",
+        snapshot_org_tax_id: org?.tax_id || "",
+        snapshot_donor_name: donorName,
+        snapshot_business_name: businessName,
+        snapshot_business_address: address || null,
+        snapshot_contact_email: email || null,
+        body_text: bodyText,
+        updated_at: new Date().toISOString(),
+      }
 
-      if (receiptError) throw receiptError
+      let receiptId: string
+
+      if (existingReceiptId) {
+        // UPDATE existing draft
+        const { error: updateError } = await supabase
+          .from("receipts")
+          .update(receiptData)
+          .eq("id", existingReceiptId)
+
+        if (updateError) throw updateError
+        receiptId = existingReceiptId
+
+        // Delete existing receipt_items and re-insert
+        await supabase
+          .from("receipt_items")
+          .delete()
+          .eq("receipt_id", existingReceiptId)
+      } else {
+        // INSERT new receipt
+        const { data: receipt, error: receiptError } = await supabase
+          .from("receipts")
+          .insert(receiptData)
+          .select()
+          .single()
+
+        if (receiptError) throw receiptError
+        receiptId = receipt.id
+        // Store the ID for future saves
+        setExistingReceiptId(receiptId)
+      }
 
       // Insert receipt items
       const receiptItems = selectedItems.map((item) => ({
-        receipt_id: receipt.id,
+        receipt_id: receiptId,
         item_id: item.id,
         snapshot_item_name: item.name,
         snapshot_estimated_value: item.estimated_value,
@@ -246,22 +268,28 @@ export function CreateReceiptSheet({
 
       if (itemsError) throw itemsError
 
-      toast({
-        title: andDownload ? "Receipt created and downloaded" : "Receipt saved as draft",
-        description: `Receipt for ${businessName} has been ${andDownload ? "created" : "saved"}.`,
-      })
-
       // Download if requested
       if (andDownload) {
-        window.open(`/api/receipts/${receipt.id}/download`, "_blank")
+        window.open(`/api/receipts/${receiptId}/download`, "_blank")
+        toast({
+          title: "Receipt downloaded",
+          description: `Receipt for ${businessName} has been saved and downloaded.`,
+        })
+        onReceiptCreated()
+        onOpenChange(false)
+      } else {
+        // Keep sheet open on draft save, show toast for 3 seconds
+        toast({
+          title: "Draft saved.",
+          duration: 3000,
+        })
+        onReceiptCreated()
+        // Do NOT close the sheet - keep it open for continued editing
       }
-
-      onReceiptCreated()
-      onOpenChange(false)
     } catch {
       toast({
         title: "Error",
-        description: "Failed to create receipt. Please try again.",
+        description: "Failed to save receipt. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -361,13 +389,7 @@ export function CreateReceiptSheet({
               </div>
             )}
 
-            {hasEligibleItems && selectedItemIds.size > 0 && (
-              <div className="flex justify-end mt-2">
-                <Badge variant="secondary">
-                  Total: ${totalValue.toLocaleString()}
-                </Badge>
-              </div>
-            )}
+            
           </div>
 
           {/* Recipient Details */}
@@ -471,9 +493,9 @@ export function CreateReceiptSheet({
               <div className="border rounded-lg p-4 bg-muted/30 text-sm whitespace-pre-wrap font-mono">
                 <div className="text-center mb-4">
                   <p className="font-bold text-base">{org?.legal_name || org?.name}</p>
-                  <p className="text-muted-foreground">In-Kind Donation Receipt</p>
+                  <p className="text-muted-foreground text-xs">In-Kind Donation Receipt</p>
                 </div>
-                {generateBodyText()}
+                {generatePreviewText()}
               </div>
             </div>
           )}
