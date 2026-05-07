@@ -46,8 +46,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import type { Business, Contact, Org, Receipt } from "@/lib/types"
-import { CreateReceiptSheet } from "@/components/create-receipt-sheet"
-import { ReceiptDetailSheet } from "@/components/receipt-detail-sheet"
+import { ReceiptSheet } from "@/components/receipt-sheet"
 
 interface BusinessesProps {
   orgId: string
@@ -123,10 +122,9 @@ export function Businesses({ orgId }: BusinessesProps) {
   const [deleteBusinessId, setDeleteBusinessId] = useState<string | null>(null)
   const [deleteContactId, setDeleteContactId] = useState<string | null>(null)
 
-  // Receipt sheet state
-  const [createReceiptSheetOpen, setCreateReceiptSheetOpen] = useState(false)
-  const [receiptDetailSheetOpen, setReceiptDetailSheetOpen] = useState(false)
-  const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(null)
+  // Receipt sheet state - single sheet handles both create and edit
+  const [receiptSheetOpen, setReceiptSheetOpen] = useState(false)
+  const [editingReceiptId, setEditingReceiptId] = useState<string | null>(null)
 
   // Contacts for selected business
   const contactsFetcher = async (): Promise<Contact[]> => {
@@ -540,7 +538,7 @@ export function Businesses({ orgId }: BusinessesProps) {
                 <div className="mt-6 pt-6 border-t">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold">Receipts</h3>
-                    <Button size="sm" onClick={() => setCreateReceiptSheetOpen(true)}>
+                    <Button size="sm" onClick={() => { setEditingReceiptId(null); setReceiptSheetOpen(true) }}>
                       <Plus className="mr-1.5 h-4 w-4" />
                       Create Receipt
                     </Button>
@@ -562,8 +560,8 @@ export function Businesses({ orgId }: BusinessesProps) {
                           key={receipt.id}
                           className="p-3 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
                           onClick={() => {
-                            setSelectedReceiptId(receipt.id)
-                            setReceiptDetailSheetOpen(true)
+                            setEditingReceiptId(receipt.id)
+                            setReceiptSheetOpen(true)
                           }}
                         >
                           <div className="flex items-center justify-between">
@@ -594,7 +592,7 @@ export function Businesses({ orgId }: BusinessesProps) {
                         size="sm"
                         variant="outline"
                         className="mt-3"
-                        onClick={() => setCreateReceiptSheetOpen(true)}
+                        onClick={() => { setEditingReceiptId(null); setReceiptSheetOpen(true) }}
                       >
                         <Plus className="mr-1.5 h-4 w-4" />
                         Create Receipt
@@ -843,25 +841,18 @@ export function Businesses({ orgId }: BusinessesProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Create Receipt Sheet */}
+      {/* Receipt Sheet - handles both create and edit */}
       {selectedBusiness && (
-        <CreateReceiptSheet
-          open={createReceiptSheetOpen}
-          onOpenChange={setCreateReceiptSheetOpen}
+        <ReceiptSheet
+          open={receiptSheetOpen}
+          onOpenChange={setReceiptSheetOpen}
           orgId={orgId}
           business={selectedBusiness}
           contacts={contacts || []}
-          onReceiptCreated={() => mutateReceipts()}
+          receiptId={editingReceiptId}
+          onReceiptSaved={() => mutateReceipts()}
         />
       )}
-
-      {/* Receipt Detail Sheet */}
-      <ReceiptDetailSheet
-        open={receiptDetailSheetOpen}
-        onOpenChange={setReceiptDetailSheetOpen}
-        receiptId={selectedReceiptId}
-        onReceiptUpdated={() => mutateReceipts()}
-      />
     </div>
   )
 }
