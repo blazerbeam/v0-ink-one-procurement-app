@@ -3,9 +3,11 @@
 import { useState } from "react"
 import Link from "next/link"
 import useSWR from "swr"
+import { format } from "date-fns"
 import {
   ArrowLeft,
   Briefcase,
+  FileText,
   Globe,
   Mail,
   Pencil,
@@ -43,7 +45,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import type { Business, Contact, Org } from "@/lib/types"
+import type { Business, Contact, Org, Receipt } from "@/lib/types"
+import { CreateReceiptSheet } from "@/components/create-receipt-sheet"
+import { ReceiptDetailSheet } from "@/components/receipt-detail-sheet"
 
 interface BusinessesProps {
   orgId: string
@@ -59,6 +63,7 @@ const emptyBusinessForm = {
   category: "",
   website: "",
   notes: "",
+  address: "",
 }
 
 const emptyContactForm = {
@@ -118,6 +123,11 @@ export function Businesses({ orgId }: BusinessesProps) {
   const [deleteBusinessId, setDeleteBusinessId] = useState<string | null>(null)
   const [deleteContactId, setDeleteContactId] = useState<string | null>(null)
 
+  // Receipt sheet state
+  const [createReceiptSheetOpen, setCreateReceiptSheetOpen] = useState(false)
+  const [receiptDetailSheetOpen, setReceiptDetailSheetOpen] = useState(false)
+  const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(null)
+
   // Contacts for selected business
   const contactsFetcher = async (): Promise<Contact[]> => {
     if (!selectedBusinessId) return []
@@ -136,6 +146,24 @@ export function Businesses({ orgId }: BusinessesProps) {
     mutate: mutateContacts,
   } = useSWR(selectedBusinessId ? `contacts-${selectedBusinessId}` : null, contactsFetcher)
 
+  // Receipts for selected business
+  const receiptsFetcher = async (): Promise<Receipt[]> => {
+    if (!selectedBusinessId) return []
+    const supabase = createClient()
+    const { data } = await supabase
+      .from("receipts")
+      .select("*")
+      .eq("business_id", selectedBusinessId)
+      .order("created_at", { ascending: false })
+    return (data || []) as Receipt[]
+  }
+
+  const {
+    data: receipts,
+    isLoading: receiptsLoading,
+    mutate: mutateReceipts,
+  } = useSWR(selectedBusinessId ? `receipts-${selectedBusinessId}` : null, receiptsFetcher)
+
   const selectedBusiness = data?.businesses.find((b) => b.id === selectedBusinessId)
 
   // Business handlers
@@ -152,6 +180,7 @@ export function Businesses({ orgId }: BusinessesProps) {
       category: business.category || "",
       website: business.website || "",
       notes: business.notes || "",
+      address: business.address || "",
     })
     setBusinessSheetOpen(true)
   }
@@ -171,6 +200,7 @@ export function Businesses({ orgId }: BusinessesProps) {
           category: businessForm.category.trim() || null,
           website: businessForm.website.trim() || null,
           notes: businessForm.notes.trim() || null,
+          address: businessForm.address.trim() || null,
         })
         .eq("id", editingBusiness.id)
     } else {
@@ -180,6 +210,7 @@ export function Businesses({ orgId }: BusinessesProps) {
         category: businessForm.category.trim() || null,
         website: businessForm.website.trim() || null,
         notes: businessForm.notes.trim() || null,
+        address: businessForm.address.trim() || null,
       })
     }
 
@@ -504,6 +535,73 @@ export function Businesses({ orgId }: BusinessesProps) {
                     </Button>
                   </div>
                 )}
+
+                {/* Receipts Section */}
+                <div className="mt-6 pt-6 border-t">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold">Receipts</h3>
+                    <Button size="sm" onClick={() => setCreateReceiptSheetOpen(true)}>
+                      <Plus className="mr-1.5 h-4 w-4" />
+                      Create Receipt
+                    </Button>
+                  </div>
+
+                  {receiptsLoading ? (
+                    <div className="space-y-2">
+                      {[1, 2].map((i) => (
+                        <div key={i} className="p-3 rounded-lg border">
+                          <Skeleton className="h-4 w-1/2 mb-2" />
+                          <Skeleton className="h-3 w-1/4" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : receipts && receipts.length > 0 ? (
+                    <div className="space-y-2">
+                      {receipts.map((receipt) => (
+                        <div
+                          key={receipt.id}
+                          className="p-3 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => {
+                            setSelectedReceiptId(receipt.id)
+                            setReceiptDetailSheetOpen(true)
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-medium">
+                                {format(new Date(receipt.receipt_date), "MMM d, yyyy")}
+                              </span>
+                            </div>
+                            <Badge
+                              variant={receipt.status === "sent" ? "default" : "secondary"}
+                              className={receipt.status === "sent" ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : ""}
+                            >
+                              {receipt.status === "sent" ? "Sent" : "Draft"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {receipt.snapshot_donor_name}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-muted-foreground">
+                      <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No receipts yet</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-3"
+                        onClick={() => setCreateReceiptSheetOpen(true)}
+                      >
+                        <Plus className="mr-1.5 h-4 w-4" />
+                        Create Receipt
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
@@ -569,6 +667,17 @@ export function Businesses({ orgId }: BusinessesProps) {
                   onChange={(e) => setBusinessForm({ ...businessForm, notes: e.target.value })}
                   placeholder="Any additional notes about this business..."
                   rows={3}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="business-address">Address</FieldLabel>
+                <Textarea
+                  id="business-address"
+                  value={businessForm.address}
+                  onChange={(e) => setBusinessForm({ ...businessForm, address: e.target.value })}
+                  placeholder="123 Main St, City, State 12345"
+                  rows={2}
                 />
               </Field>
             </FieldGroup>
@@ -733,6 +842,26 @@ export function Businesses({ orgId }: BusinessesProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create Receipt Sheet */}
+      {selectedBusiness && (
+        <CreateReceiptSheet
+          open={createReceiptSheetOpen}
+          onOpenChange={setCreateReceiptSheetOpen}
+          orgId={orgId}
+          business={selectedBusiness}
+          contacts={contacts || []}
+          onReceiptCreated={() => mutateReceipts()}
+        />
+      )}
+
+      {/* Receipt Detail Sheet */}
+      <ReceiptDetailSheet
+        open={receiptDetailSheetOpen}
+        onOpenChange={setReceiptDetailSheetOpen}
+        receiptId={selectedReceiptId}
+        onReceiptUpdated={() => mutateReceipts()}
+      />
     </div>
   )
 }
